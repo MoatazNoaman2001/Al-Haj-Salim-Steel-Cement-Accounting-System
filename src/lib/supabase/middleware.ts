@@ -43,9 +43,18 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && isLoginPage) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/cement-daily";
-    return NextResponse.redirect(url);
+    // Verify user has a profile before redirecting to dashboard
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", user.id)
+      .single();
+
+    if (profile) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/cement-daily";
+      return NextResponse.redirect(url);
+    }
   }
 
   return supabaseResponse;

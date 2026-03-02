@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export function useRealtimeCement(date: string) {
   const router = useRouter();
-  const supabase = createClient();
+  const supabaseRef = useRef(createClient());
 
   useEffect(() => {
+    const supabase = supabaseRef.current;
     const channel = supabase
       .channel("cement-daily-changes")
       .on(
@@ -28,14 +29,16 @@ export function useRealtimeCement(date: string) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [date, router, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
 }
 
 export function useRealtimeCorrections() {
   const router = useRouter();
-  const supabase = createClient();
+  const supabaseRef = useRef(createClient());
 
   useEffect(() => {
+    const supabase = supabaseRef.current;
     const channel = supabase
       .channel("correction-changes")
       .on(
@@ -54,5 +57,6 @@ export function useRealtimeCorrections() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [router, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }
