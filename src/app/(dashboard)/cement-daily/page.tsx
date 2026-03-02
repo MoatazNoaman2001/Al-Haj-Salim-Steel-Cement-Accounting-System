@@ -12,31 +12,48 @@ export default async function CementDailyPage({ searchParams }: PageProps) {
   const date = params.date || todayISO();
   const supabase = await createClient();
 
-  const [entriesResult, customersResult, productsResult] = await Promise.all([
-    supabase
-      .from("daily_cement")
-      .select(
+  const [entriesResult, customersResult, productsResult, bondsResult, cashBalanceResult] =
+    await Promise.all([
+      supabase
+        .from("daily_cement")
+        .select(
+          `
+          *,
+          customer:customers!customer_id(id, name),
+          product:products!product_id(id, name),
+          creator:profiles!created_by(id, full_name)
         `
-        *,
-        customer:customers!customer_id(id, name),
-        product:products!product_id(id, name),
-        creator:profiles!created_by(id, full_name)
-      `
-      )
-      .eq("entry_date", date)
-      .order("row_number", { ascending: true }),
-    supabase
-      .from("customers")
-      .select("id, name")
-      .eq("is_active", true)
-      .order("name"),
-    supabase
-      .from("products")
-      .select("id, name")
-      .eq("category", "cement")
-      .eq("is_active", true)
-      .order("name"),
-  ]);
+        )
+        .eq("entry_date", date)
+        .order("row_number", { ascending: true }),
+      supabase
+        .from("customers")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name"),
+      supabase
+        .from("products")
+        .select("id, name")
+        .eq("category", "cement")
+        .eq("is_active", true)
+        .order("name"),
+      supabase
+        .from("daily_bonds")
+        .select(
+          `
+          *,
+          customer:customers!customer_id(id, name),
+          creator:profiles!created_by(id, full_name)
+        `
+        )
+        .eq("entry_date", date)
+        .order("row_number", { ascending: true }),
+      supabase
+        .from("daily_cash_balance")
+        .select("*")
+        .eq("balance_date", date)
+        .maybeSingle(),
+    ]);
 
   return (
     <div className="flex flex-col h-full">
@@ -46,6 +63,8 @@ export default async function CementDailyPage({ searchParams }: PageProps) {
           data={entriesResult.data ?? []}
           customers={customersResult.data ?? []}
           products={productsResult.data ?? []}
+          bonds={bondsResult.data ?? []}
+          cashBalance={cashBalanceResult.data ?? null}
           initialDate={date}
         />
       </div>

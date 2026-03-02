@@ -33,6 +33,33 @@ export function useRealtimeCement(date: string) {
   }, [date]);
 }
 
+export function useRealtimeBonds(date: string) {
+  const router = useRouter();
+  const supabase = createClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("bonds-daily-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "daily_bonds",
+          filter: `entry_date=eq.${date}`,
+        },
+        () => {
+          router.refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [date, router, supabase]);
+}
+
 export function useRealtimeCorrections() {
   const router = useRouter();
   const supabaseRef = useRef(createClient());

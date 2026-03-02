@@ -1,13 +1,23 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { DataTable } from "./data-table";
-import type { DailyCementWithRelations, Customer, Product } from "@/types/database";
+import { BondsTable } from "./bonds-table";
+import { CashBalanceSummary } from "./cash-balance-summary";
+import type {
+  DailyCementWithRelations,
+  DailyBondWithRelations,
+  DailyCashBalance,
+  Customer,
+  Product,
+} from "@/types/database";
 
 interface CementDailyClientProps {
   data: DailyCementWithRelations[];
   customers: Pick<Customer, "id" | "name">[];
   products: Pick<Product, "id" | "name">[];
+  bonds: DailyBondWithRelations[];
+  cashBalance: DailyCashBalance | null;
   initialDate: string;
 }
 
@@ -15,6 +25,8 @@ export function CementDailyClient({
   data,
   customers,
   products,
+  bonds,
+  cashBalance,
   initialDate,
 }: CementDailyClientProps) {
   const router = useRouter();
@@ -24,12 +36,22 @@ export function CementDailyClient({
   }
 
   return (
-    <DataTable
-      data={data}
-      customers={customers}
-      products={products}
-      initialDate={initialDate}
-      onDateChange={handleDateChange}
-    />
+    <>
+      <DataTable
+        data={data}
+        customers={customers}
+        products={products}
+        initialDate={initialDate}
+        onDateChange={handleDateChange}
+      />
+
+      <BondsTable data={bonds} customers={customers} date={initialDate} />
+
+      <CashBalanceSummary
+        entries={data}
+        bonds={bonds}
+        cashBalance={cashBalance}
+      />
+    </>
   );
 }

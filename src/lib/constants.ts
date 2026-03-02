@@ -47,6 +47,16 @@ export const TABLE_HEADERS = {
   actions: "إجراءات",
 };
 
+export const BOND_TABLE_HEADERS = {
+  rowNum: "م",
+  customer: "العميل",
+  amount: "المبلغ",
+  bondNumber: "رقم البون",
+  notes: "ملاحظات",
+  createdBy: "بواسطة",
+  actions: "إجراءات",
+};
+
 export const MESSAGES = {
   loginSuccess: "تم تسجيل الدخول بنجاح",
   loginError: "خطأ في البريد الإلكتروني أو كلمة المرور",
@@ -54,6 +64,9 @@ export const MESSAGES = {
   correctionRequested: "تم إرسال طلب التصحيح بنجاح",
   correctionApproved: "تمت الموافقة على التصحيح",
   correctionRejected: "تم رفض طلب التصحيح",
+  bondAdded: "تم إضافة البون بنجاح",
+  bondDeleted: "تم حذف البون بنجاح",
+  cashBalanceUpdated: "تم تحديث الرصيد النقدي",
   error: "حدث خطأ، يرجى المحاولة مرة أخرى",
   requiredField: "هذا الحقل مطلوب",
   invalidNumber: "يرجى إدخال رقم صحيح",

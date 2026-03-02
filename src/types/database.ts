@@ -73,6 +73,44 @@ export interface DailyCementInsert {
   created_by: string;
 }
 
+// Daily Bonds (جدول البونات)
+export interface DailyBond {
+  id: string;
+  entry_date: string;
+  customer_id: string;
+  amount: number;
+  bond_number: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  row_number: number;
+}
+
+export interface DailyBondWithRelations extends DailyBond {
+  customer: Pick<Customer, "id" | "name">;
+  creator: Pick<Profile, "id" | "full_name">;
+}
+
+export interface DailyBondInsert {
+  entry_date: string;
+  customer_id: string;
+  amount: number;
+  bond_number?: string;
+  notes?: string;
+  created_by: string;
+}
+
+// Cash Balance (رصيد نقدي)
+export interface DailyCashBalance {
+  id: string;
+  balance_date: string;
+  opening_balance: number;
+  notes: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CorrectionRequest {
   id: string;
   entry_id: string;

@@ -259,15 +259,71 @@ CREATE POLICY "Admin update correction requests" ON correction_requests
 
 
 -- =====================================================
--- 7. ENABLE REALTIME
+-- 7. DAILY BONDS (جدول البونات)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS daily_bonds (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  customer_id UUID NOT NULL REFERENCES customers(id),
+  amount NUMERIC(14,2) NOT NULL,
+  bond_number TEXT,
+  notes TEXT,
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  row_number SERIAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_bonds_date ON daily_bonds(entry_date);
+CREATE INDEX IF NOT EXISTS idx_bonds_customer ON daily_bonds(customer_id);
+
+ALTER TABLE daily_bonds ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read bond entries" ON daily_bonds
+  FOR SELECT USING (created_by = auth.uid() OR is_admin());
+CREATE POLICY "Insert bond entries" ON daily_bonds
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
+CREATE POLICY "Admin update bond entries" ON daily_bonds
+  FOR UPDATE USING (is_admin());
+CREATE POLICY "Admin delete bond entries" ON daily_bonds
+  FOR DELETE USING (is_admin());
+
+
+-- =====================================================
+-- 8. CASH BALANCE TRACKING (رصيد نقدي)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS daily_cash_balance (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  balance_date DATE NOT NULL UNIQUE,
+  opening_balance NUMERIC(14,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  updated_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cash_balance_date ON daily_cash_balance(balance_date);
+
+ALTER TABLE daily_cash_balance ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read cash balance" ON daily_cash_balance
+  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin manage cash balance" ON daily_cash_balance
+  FOR ALL USING (is_admin());
+
+
+-- =====================================================
+-- 9. ENABLE REALTIME
 -- =====================================================
 
 ALTER PUBLICATION supabase_realtime ADD TABLE daily_cement;
 ALTER PUBLICATION supabase_realtime ADD TABLE correction_requests;
+ALTER PUBLICATION supabase_realtime ADD TABLE daily_bonds;
 
 
 -- =====================================================
--- 8. SEED DATA
+-- 10. SEED DATA
 -- =====================================================
 
 -- Cement product types
