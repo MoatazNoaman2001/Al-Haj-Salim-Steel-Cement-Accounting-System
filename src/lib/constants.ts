@@ -18,9 +18,10 @@ export const CORRECTION_STATUS_LABELS: Record<string, string> = {
 };
 
 export const NAV_ITEMS = [
+  { href: "/dashboard", label: "لوحة التحكم", icon: "LayoutDashboard" as const, active: true },
   { href: "/cement-daily", label: "يومية الاسمنت", icon: "FileText" as const, active: true },
+  { href: "/cashier-daily", label: "يومية الكاشير", icon: "Calculator" as const, active: true },
   { href: "/corrections", label: "طلبات التصحيح", icon: "ClipboardCheck" as const, active: true, adminOnly: true },
-  { href: "#", label: "يومية الكاشير", icon: "Calculator" as const, active: false },
   { href: "#", label: "الجرد", icon: "Package" as const, active: false },
   { href: "#", label: "البنوك", icon: "Landmark" as const, active: false },
   { href: "#", label: "العملاء", icon: "Users" as const, active: false },
@@ -47,13 +48,33 @@ export const TABLE_HEADERS = {
   actions: "إجراءات",
 };
 
-export const BOND_TABLE_HEADERS = {
+export const INVENTORY_TABLE_HEADERS = {
+  product: "النوع",
+  previousBalance: "الرصيد المتبقي",
+  added: "المضاف",
+  sold: "المباع",
+  netRemaining: "الباقي",
+  costPrice: "سعر القطع",
+  remainingCost: "تكلفة الرصيد المتبقي",
+};
+
+export const DEPOSIT_TABLE_HEADERS = {
   rowNum: "م",
-  customer: "العميل",
   amount: "المبلغ",
-  bondNumber: "رقم البون",
-  notes: "ملاحظات",
+  description: "التفاصيل",
   createdBy: "بواسطة",
+  actions: "إجراءات",
+};
+
+export const CASHIER_TABLE_HEADERS = {
+  rowNum: "م",
+  date: "التاريخ",
+  description: "التفاصيل",
+  debit: "عليه",
+  credit: "له",
+  balance: "الرصيد",
+  createdBy: "بواسطة",
+  status: "الحالة",
   actions: "إجراءات",
 };
 
@@ -64,8 +85,10 @@ export const MESSAGES = {
   correctionRequested: "تم إرسال طلب التصحيح بنجاح",
   correctionApproved: "تمت الموافقة على التصحيح",
   correctionRejected: "تم رفض طلب التصحيح",
-  bondAdded: "تم إضافة البون بنجاح",
-  bondDeleted: "تم حذف البون بنجاح",
+  inventoryUpdated: "تم تحديث جدول البونات",
+  depositAdded: "تم إضافة الإيداع بنجاح",
+  depositDeleted: "تم حذف الإيداع بنجاح",
+  cashierEntryAdded: "تم إضافة القيد بنجاح",
   cashBalanceUpdated: "تم تحديث الرصيد النقدي",
   error: "حدث خطأ، يرجى المحاولة مرة أخرى",
   requiredField: "هذا الحقل مطلوب",

@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { MESSAGES } from "@/lib/constants";
 import {
-  addBondSchema,
-  type AddBondFormValues,
+  addCashierEntrySchema,
+  type AddCashierEntryFormValues,
 } from "@/lib/validations/cement-daily";
 import {
   Dialog,
@@ -24,48 +24,49 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { CustomerCombobox } from "@/components/shared/customer-combobox";
-import type { Customer } from "@/types/database";
 import { useRouter } from "next/navigation";
 
-interface AddBondDialogProps {
+interface AddCashierEntryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  customers: Pick<Customer, "id" | "name">[];
   date: string;
   userId: string;
 }
 
-export function AddBondDialog({
+export function AddCashierEntryDialog({
   open,
   onOpenChange,
-  customers,
   date,
   userId,
-}: AddBondDialogProps) {
+}: AddCashierEntryDialogProps) {
   const supabase = createClient();
   const router = useRouter();
 
-  const form = useForm<AddBondFormValues>({
-    resolver: zodResolver(addBondSchema),
+  const form = useForm<AddCashierEntryFormValues>({
+    resolver: zodResolver(addCashierEntrySchema),
     defaultValues: {
       entry_date: date,
-      customer_id: "",
-      amount: "0",
-      bond_number: "",
-      notes: "",
+      description: "",
+      debit: "0",
+      credit: "0",
     },
   });
 
-  async function onSubmit(values: AddBondFormValues) {
-    const { error } = await supabase.from("daily_bonds").insert({
+  async function onSubmit(values: AddCashierEntryFormValues) {
+    const debit = Number(values.debit);
+    const credit = Number(values.credit);
+
+    if (debit === 0 && credit === 0) {
+      toast.error("يجب إدخال قيمة في عليه أو له");
+      return;
+    }
+
+    const { error } = await supabase.from("daily_cashier").insert({
       entry_date: values.entry_date,
-      customer_id: values.customer_id,
-      amount: Number(values.amount),
-      bond_number: values.bond_number || null,
-      notes: values.notes || null,
+      description: values.description,
+      debit,
+      credit,
       created_by: userId,
     });
 
@@ -74,13 +75,12 @@ export function AddBondDialog({
       return;
     }
 
-    toast.success(MESSAGES.bondAdded);
+    toast.success(MESSAGES.cashierEntryAdded);
     form.reset({
       entry_date: date,
-      customer_id: "",
-      amount: "0",
-      bond_number: "",
-      notes: "",
+      description: "",
+      debit: "0",
+      credit: "0",
     });
     onOpenChange(false);
     router.refresh();
@@ -90,7 +90,7 @@ export function AddBondDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>إضافة بون جديد</DialogTitle>
+          <DialogTitle>إضافة قيد جديد</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -109,67 +109,62 @@ export function AddBondDialog({
             />
             <FormField
               control={form.control}
-              name="customer_id"
+              name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>العميل</FormLabel>
-                  <FormControl>
-                    <CustomerCombobox
-                      customers={customers}
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>المبلغ</FormLabel>
+                  <FormLabel>التفاصيل</FormLabel>
                   <FormControl>
                     <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
                       {...field}
-                      dir="ltr"
-                      className="text-left"
+                      placeholder="مثال: واصل من الحج سليم البيت"
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="bond_number"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>رقم البون</FormLabel>
-                  <FormControl>
-                    <Input {...field} dir="ltr" className="text-left" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>ملاحظات</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="debit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>عليه (خروج)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        {...field}
+                        dir="ltr"
+                        className="text-left"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="credit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>له (دخول)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        {...field}
+                        dir="ltr"
+                        className="text-left"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button
                 type="button"

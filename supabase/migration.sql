@@ -1,7 +1,10 @@
 -- =====================================================
--- Al-Haj Salim - Cement Daily Ledger
--- Database Migration
+-- Al-Haj Salim - Steel & Cement Accounting System
+-- Database Migration (v2)
 -- Run this in Supabase SQL Editor
+-- =====================================================
+-- NOTE: If you already ran v1, see migration-update.sql
+-- for incremental changes only.
 -- =====================================================
 
 -- =====================================================
@@ -259,39 +262,43 @@ CREATE POLICY "Admin update correction requests" ON correction_requests
 
 
 -- =====================================================
--- 7. DAILY BONDS (جدول البونات)
+-- 7. DAILY INVENTORY / جدول البونات (Stock Tracking)
 -- =====================================================
+-- Tracks cement stock per product type per day.
+-- المباع (sold) is computed from daily_cement on the frontend.
+-- الباقي = previous_balance + added - sold (frontend)
+-- تكلفة الرصيد المتبقي = الباقي × cost_price (frontend)
 
-CREATE TABLE IF NOT EXISTS daily_bonds (
+CREATE TABLE IF NOT EXISTS daily_inventory (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  customer_id UUID NOT NULL REFERENCES customers(id),
-  amount NUMERIC(14,2) NOT NULL,
-  bond_number TEXT,
+  product_id UUID NOT NULL REFERENCES products(id),
+  previous_balance NUMERIC(10,3) NOT NULL DEFAULT 0,
+  added NUMERIC(10,3) NOT NULL DEFAULT 0,
+  cost_price NUMERIC(12,2) NOT NULL DEFAULT 0,
   notes TEXT,
   created_by UUID NOT NULL REFERENCES profiles(id),
   created_at TIMESTAMPTZ DEFAULT now(),
-  row_number SERIAL
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(entry_date, product_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_bonds_date ON daily_bonds(entry_date);
-CREATE INDEX IF NOT EXISTS idx_bonds_customer ON daily_bonds(customer_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_date ON daily_inventory(entry_date);
 
-ALTER TABLE daily_bonds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE daily_inventory ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Read bond entries" ON daily_bonds
-  FOR SELECT USING (created_by = auth.uid() OR is_admin());
-CREATE POLICY "Insert bond entries" ON daily_bonds
+CREATE POLICY "Read inventory" ON daily_inventory
+  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Insert inventory" ON daily_inventory
   FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
-CREATE POLICY "Admin update bond entries" ON daily_bonds
-  FOR UPDATE USING (is_admin());
-CREATE POLICY "Admin delete bond entries" ON daily_bonds
-  FOR DELETE USING (is_admin());
+CREATE POLICY "Update inventory" ON daily_inventory
+  FOR UPDATE USING (created_by = auth.uid() OR is_admin());
 
 
 -- =====================================================
 -- 8. CASH BALANCE TRACKING (رصيد نقدي)
 -- =====================================================
+-- Formula: رصيد نقدي = opening_balance + total_sales - total_deposits
 
 CREATE TABLE IF NOT EXISTS daily_cash_balance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -314,37 +321,109 @@ CREATE POLICY "Admin manage cash balance" ON daily_cash_balance
 
 
 -- =====================================================
--- 9. ENABLE REALTIME
+-- 9. DAILY DEPOSITS / الايداعات
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS daily_deposits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  amount NUMERIC(14,2) NOT NULL,
+  description TEXT,
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  row_number SERIAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_deposits_date ON daily_deposits(entry_date);
+
+ALTER TABLE daily_deposits ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read deposits" ON daily_deposits
+  FOR SELECT USING (created_by = auth.uid() OR is_admin());
+CREATE POLICY "Insert deposits" ON daily_deposits
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
+CREATE POLICY "Admin delete deposits" ON daily_deposits
+  FOR DELETE USING (is_admin());
+
+
+-- =====================================================
+-- 10. CASHIER DAILY LEDGER / يومية الكاشير
+-- =====================================================
+-- MUST balance to zero daily: total عليه = total له
+
+CREATE TABLE IF NOT EXISTS daily_cashier (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  description TEXT NOT NULL,
+  debit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  credit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  row_number SERIAL,
+
+  -- Audit trail (no deletion)
+  is_corrected BOOLEAN DEFAULT false,
+  correction_of_id UUID REFERENCES daily_cashier(id),
+  corrected_by_entry_id UUID REFERENCES daily_cashier(id),
+  correction_reason TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_cashier_date ON daily_cashier(entry_date);
+CREATE INDEX IF NOT EXISTS idx_cashier_created_by ON daily_cashier(created_by);
+
+ALTER TABLE daily_cashier ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read cashier entries" ON daily_cashier
+  FOR SELECT USING (created_by = auth.uid() OR is_admin());
+CREATE POLICY "Insert cashier entries" ON daily_cashier
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
+CREATE POLICY "Admin update cashier entries" ON daily_cashier
+  FOR UPDATE USING (is_admin());
+
+
+-- =====================================================
+-- 11. ENABLE REALTIME
 -- =====================================================
 
 ALTER PUBLICATION supabase_realtime ADD TABLE daily_cement;
 ALTER PUBLICATION supabase_realtime ADD TABLE correction_requests;
-ALTER PUBLICATION supabase_realtime ADD TABLE daily_bonds;
+ALTER PUBLICATION supabase_realtime ADD TABLE daily_inventory;
+ALTER PUBLICATION supabase_realtime ADD TABLE daily_deposits;
+ALTER PUBLICATION supabase_realtime ADD TABLE daily_cashier;
 
 
 -- =====================================================
--- 10. SEED DATA
+-- 12. SEED DATA
 -- =====================================================
 
--- Cement product types
-INSERT INTO products (name, category) VALUES
-  ('اسمنت مقاوم', 'cement'),
-  ('اسمنت عادي', 'cement'),
-  ('اسمنت أبيض', 'cement')
+-- Cement product types (from actual business data)
+INSERT INTO products (name, category, unit) VALUES
+  ('مقاوم', 'cement', 'ton'),
+  ('عادة 32', 'cement', 'ton'),
+  ('عادة 42', 'cement', 'ton'),
+  ('تشطيبات', 'cement', 'ton'),
+  ('سايب جديد', 'cement', 'ton'),
+  ('مقاوم اسيوط', 'cement', 'ton'),
+  ('مقاوم مصريين', 'cement', 'ton'),
+  ('عادة مصريين', 'cement', 'ton'),
+  ('مهندس', 'cement', 'ton')
 ON CONFLICT DO NOTHING;
 
--- Sample customers
+-- Sample customers (from actual data)
 INSERT INTO customers (name, phone) VALUES
-  ('محمد أحمد', '01012345678'),
-  ('عبدالله حسن', '01112345678'),
-  ('أحمد محمود', '01212345678'),
-  ('سعيد عبدالرحمن', '01512345678'),
-  ('حسين علي', '01012345679')
+  ('احمد توفيق', NULL),
+  ('اسعد جورج', NULL),
+  ('شركة البدري', NULL),
+  ('اشرف ديروط', NULL),
+  ('حسين كمال', NULL),
+  ('طارق أسيوط الجديد', NULL),
+  ('احمد هيبك', NULL),
+  ('ايمن كمال شكرى', NULL)
 ON CONFLICT DO NOTHING;
 
 
 -- =====================================================
--- 9. AFTER CREATING USERS IN SUPABASE AUTH DASHBOARD:
+-- AFTER CREATING USERS IN SUPABASE AUTH DASHBOARD:
 --    Run this to make a user admin:
 --
 --    UPDATE profiles SET role = 'admin' WHERE id = '<user-uuid>';

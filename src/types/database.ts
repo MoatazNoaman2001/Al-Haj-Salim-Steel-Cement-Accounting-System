@@ -73,34 +73,60 @@ export interface DailyCementInsert {
   created_by: string;
 }
 
-// Daily Bonds (جدول البونات)
-export interface DailyBond {
+// Daily Inventory / جدول البونات (Stock Tracking per Product)
+export interface DailyInventory {
   id: string;
   entry_date: string;
-  customer_id: string;
-  amount: number;
-  bond_number: string | null;
+  product_id: string;
+  previous_balance: number;
+  added: number;
+  cost_price: number;
   notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DailyInventoryWithProduct extends DailyInventory {
+  product: Pick<Product, "id" | "name">;
+}
+
+// Computed inventory row (sold/remaining calculated from daily_cement)
+export interface InventoryRow {
+  product: Pick<Product, "id" | "name">;
+  previous_balance: number;
+  added: number;
+  sold: number; // computed from daily_cement
+  net_remaining: number; // previous_balance + added - sold
+  cost_price: number;
+  remaining_cost: number; // net_remaining * cost_price
+  inventory_id: string | null;
+}
+
+// Daily Deposits / الايداعات
+export interface DailyDeposit {
+  id: string;
+  entry_date: string;
+  amount: number;
+  description: string | null;
   created_by: string;
   created_at: string;
   row_number: number;
 }
 
-export interface DailyBondWithRelations extends DailyBond {
-  customer: Pick<Customer, "id" | "name">;
+export interface DailyDepositWithCreator extends DailyDeposit {
   creator: Pick<Profile, "id" | "full_name">;
 }
 
-export interface DailyBondInsert {
+export interface DailyDepositInsert {
   entry_date: string;
-  customer_id: string;
   amount: number;
-  bond_number?: string;
-  notes?: string;
+  description?: string;
   created_by: string;
 }
 
 // Cash Balance (رصيد نقدي)
+// Formula: closing = opening_balance + total_sales - total_deposits
 export interface DailyCashBalance {
   id: string;
   balance_date: string;
@@ -109,6 +135,34 @@ export interface DailyCashBalance {
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Cashier Daily Ledger / يومية الكاشير
+export interface DailyCashier {
+  id: string;
+  entry_date: string;
+  description: string;
+  debit: number;
+  credit: number;
+  created_by: string;
+  created_at: string;
+  row_number: number;
+  is_corrected: boolean;
+  correction_of_id: string | null;
+  corrected_by_entry_id: string | null;
+  correction_reason: string | null;
+}
+
+export interface DailyCashierWithCreator extends DailyCashier {
+  creator: Pick<Profile, "id" | "full_name">;
+}
+
+export interface DailyCashierInsert {
+  entry_date: string;
+  description: string;
+  debit: number;
+  credit: number;
+  created_by: string;
 }
 
 export interface CorrectionRequest {

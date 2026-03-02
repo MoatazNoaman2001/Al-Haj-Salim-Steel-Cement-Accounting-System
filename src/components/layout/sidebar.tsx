@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  LayoutDashboard,
   FileText,
   ClipboardCheck,
   Calculator,
@@ -22,6 +23,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 const iconMap = {
+  LayoutDashboard,
   FileText,
   ClipboardCheck,
   Calculator,

@@ -1,37 +1,40 @@
 "use client";
 
 import { useMemo } from "react";
-import { Banknote, Receipt, Wallet } from "lucide-react";
+import { Banknote, ArrowDownToLine, Wallet } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import type {
   DailyCementWithRelations,
-  DailyBondWithRelations,
+  DailyDepositWithCreator,
   DailyCashBalance,
 } from "@/types/database";
 
 interface CashBalanceSummaryProps {
   entries: DailyCementWithRelations[];
-  bonds: DailyBondWithRelations[];
+  deposits: DailyDepositWithCreator[];
   cashBalance: DailyCashBalance | null;
 }
 
 export function CashBalanceSummary({
   entries,
-  bonds,
+  deposits,
   cashBalance,
 }: CashBalanceSummaryProps) {
   const summary = useMemo(() => {
     const activeEntries = entries.filter((e) => !e.is_corrected);
-    const totalPaid = activeEntries.reduce(
-      (sum, e) => sum + (e.amount_paid ?? 0),
+    const totalSales = activeEntries.reduce(
+      (sum, e) => sum + (e.total_amount ?? 0),
       0
     );
-    const totalBonds = bonds.reduce((sum, b) => sum + (b.amount ?? 0), 0);
+    const totalDeposits = deposits.reduce(
+      (sum, d) => sum + (d.amount ?? 0),
+      0
+    );
     const openingBalance = cashBalance?.opening_balance ?? 0;
-    const closingBalance = openingBalance + totalPaid - totalBonds;
+    const closingBalance = openingBalance + totalSales - totalDeposits;
 
-    return { totalPaid, totalBonds, openingBalance, closingBalance };
-  }, [entries, bonds, cashBalance]);
+    return { totalSales, totalDeposits, openingBalance, closingBalance };
+  }, [entries, deposits, cashBalance]);
 
   return (
     <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -47,19 +50,19 @@ export function CashBalanceSummary({
       <div className="rounded-lg border bg-card p-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
           <Banknote className="h-4 w-4" />
-          إجمالي المدفوع
+          إجمالي المبيعات
         </div>
         <p className="text-xl font-bold text-green-600">
-          {formatCurrency(summary.totalPaid)}
+          {formatCurrency(summary.totalSales)}
         </p>
       </div>
       <div className="rounded-lg border bg-card p-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-          <Receipt className="h-4 w-4" />
-          إجمالي البونات
+          <ArrowDownToLine className="h-4 w-4" />
+          إجمالي الإيداعات
         </div>
         <p className="text-xl font-bold text-orange-600">
-          {formatCurrency(summary.totalBonds)}
+          {formatCurrency(summary.totalDeposits)}
         </p>
       </div>
       <div className="rounded-lg border bg-primary/5 border-primary/20 p-4">

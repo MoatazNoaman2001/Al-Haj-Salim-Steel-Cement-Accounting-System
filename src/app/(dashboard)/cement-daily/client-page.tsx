@@ -2,11 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { DataTable } from "./data-table";
-import { BondsTable } from "./bonds-table";
+import { DepositsTable } from "./deposits-table";
+import { InventoryTable } from "./inventory-table";
 import { CashBalanceSummary } from "./cash-balance-summary";
 import type {
   DailyCementWithRelations,
-  DailyBondWithRelations,
+  DailyInventoryWithProduct,
+  DailyDepositWithCreator,
   DailyCashBalance,
   Customer,
   Product,
@@ -16,7 +18,8 @@ interface CementDailyClientProps {
   data: DailyCementWithRelations[];
   customers: Pick<Customer, "id" | "name">[];
   products: Pick<Product, "id" | "name">[];
-  bonds: DailyBondWithRelations[];
+  inventory: DailyInventoryWithProduct[];
+  deposits: DailyDepositWithCreator[];
   cashBalance: DailyCashBalance | null;
   initialDate: string;
 }
@@ -25,7 +28,8 @@ export function CementDailyClient({
   data,
   customers,
   products,
-  bonds,
+  inventory,
+  deposits,
   cashBalance,
   initialDate,
 }: CementDailyClientProps) {
@@ -45,11 +49,18 @@ export function CementDailyClient({
         onDateChange={handleDateChange}
       />
 
-      <BondsTable data={bonds} customers={customers} date={initialDate} />
+      <DepositsTable data={deposits} date={initialDate} />
+
+      <InventoryTable
+        inventory={inventory}
+        products={products}
+        entries={data}
+        date={initialDate}
+      />
 
       <CashBalanceSummary
         entries={data}
-        bonds={bonds}
+        deposits={deposits}
         cashBalance={cashBalance}
       />
     </>

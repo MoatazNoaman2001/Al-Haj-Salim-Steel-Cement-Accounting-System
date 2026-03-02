@@ -39,12 +39,19 @@ export const correctionRequestSchema = z.object({
 
 export type CorrectionRequestFormValues = z.infer<typeof correctionRequestSchema>;
 
-export const addBondSchema = z.object({
+export const addDepositSchema = z.object({
   entry_date: z.string().min(1, "التاريخ مطلوب"),
-  customer_id: z.string().min(1, "العميل مطلوب"),
   amount: positiveNumericString("المبلغ يجب أن يكون أكبر من صفر"),
-  bond_number: z.string().optional(),
-  notes: z.string().optional(),
+  description: z.string().optional(),
 });
 
-export type AddBondFormValues = z.infer<typeof addBondSchema>;
+export type AddDepositFormValues = z.infer<typeof addDepositSchema>;
+
+export const addCashierEntrySchema = z.object({
+  entry_date: z.string().min(1, "التاريخ مطلوب"),
+  description: z.string().min(1, "التفاصيل مطلوبة"),
+  debit: nonNegativeNumericString("القيمة لا يمكن أن تكون سالبة"),
+  credit: nonNegativeNumericString("القيمة لا يمكن أن تكون سالبة"),
+});
+
+export type AddCashierEntryFormValues = z.infer<typeof addCashierEntrySchema>;
