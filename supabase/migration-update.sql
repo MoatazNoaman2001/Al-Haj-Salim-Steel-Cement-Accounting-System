@@ -111,16 +111,33 @@ ALTER PUBLICATION supabase_realtime ADD TABLE daily_cashier;
 -- Update seed data with correct product names
 -- =====================================================
 
+-- Cement product types (confirmed by accountant)
 INSERT INTO products (name, category, unit) VALUES
-  ('مقاوم', 'cement', 'ton'),
-  ('عادة 32', 'cement', 'ton'),
-  ('عادة 42', 'cement', 'ton'),
-  ('تشطيبات', 'cement', 'ton'),
-  ('سايب جديد', 'cement', 'ton'),
-  ('مقاوم اسيوط', 'cement', 'ton'),
   ('مقاوم مصريين', 'cement', 'ton'),
-  ('عادة مصريين', 'cement', 'ton'),
-  ('مهندس', 'cement', 'ton')
+  ('عاده مصريين', 'cement', 'ton'),
+  ('سايب مصريين', 'cement', 'ton'),
+  ('مقاوم تعمير', 'cement', 'ton'),
+  ('عاده 32 تعمير', 'cement', 'ton'),
+  ('تشطيبات', 'cement', 'ton'),
+  ('سايب تعمير', 'cement', 'ton'),
+  ('مقاوم اسيوط', 'cement', 'ton'),
+  ('عاده اسيوط', 'cement', 'ton'),
+  ('سايب اسيوط', 'cement', 'ton'),
+  ('مهندس', 'cement', 'ton'),
+  ('الفهد', 'cement', 'ton'),
+  ('عاده 42 السهم', 'cement', 'ton')
+ON CONFLICT DO NOTHING;
+
+-- Steel product types (confirmed by accountant)
+INSERT INTO products (name, category, unit) VALUES
+  ('حديد عز', 'steel', 'ton'),
+  ('حديد جيوشى', 'steel', 'ton'),
+  ('حديد العربيه للصلب', 'steel', 'ton'),
+  ('حديد النوبريه', 'steel', 'ton'),
+  ('حديد المصريين', 'steel', 'ton'),
+  ('حديد عنتر', 'steel', 'ton'),
+  ('حديد المراكبى', 'steel', 'ton'),
+  ('مصر استيل', 'steel', 'ton')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO customers (name, phone) VALUES

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   FileText,
+  Hammer,
   ClipboardCheck,
   Calculator,
   Package,
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 const iconMap = {
   LayoutDashboard,
   FileText,
+  Hammer,
   ClipboardCheck,
   Calculator,
   Package,

@@ -20,6 +20,7 @@ export const CORRECTION_STATUS_LABELS: Record<string, string> = {
 export const NAV_ITEMS = [
   { href: "/dashboard", label: "لوحة التحكم", icon: "LayoutDashboard" as const, active: true },
   { href: "/cement-daily", label: "يومية الاسمنت", icon: "FileText" as const, active: true },
+  { href: "/steel-daily", label: "يومية الحديد", icon: "Hammer" as const, active: true },
   { href: "/cashier-daily", label: "يومية الكاشير", icon: "Calculator" as const, active: true },
   { href: "/corrections", label: "طلبات التصحيح", icon: "ClipboardCheck" as const, active: true, adminOnly: true },
   { href: "#", label: "الجرد", icon: "Package" as const, active: false },
