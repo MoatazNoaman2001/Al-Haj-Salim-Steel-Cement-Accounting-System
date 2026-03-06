@@ -2,6 +2,7 @@
 
 import { UserContext } from "@/hooks/use-user";
 import { Sidebar } from "./sidebar";
+import { PageTransition } from "./page-transition";
 import type { Profile } from "@/types/database";
 
 interface AppShellProps {
@@ -21,7 +22,9 @@ export function AppShell({ userId, profile, children }: AppShellProps) {
     >
       <div className="flex h-screen">
         <Sidebar />
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="flex-1 overflow-auto">
+            <PageTransition>{children}</PageTransition>
+          </main>
       </div>
     </UserContext.Provider>
   );

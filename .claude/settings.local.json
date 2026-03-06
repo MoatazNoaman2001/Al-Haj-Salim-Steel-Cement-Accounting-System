@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"C:\\\\Users\\\\moata\\\\Documents\\\\Al-Haj-Salim-Steel-Cement-Accounting-System/src/app/\\(dashboard\\)\" -type f -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.jsx\" -o -name \"*.js\" | head -50)",
+      "Bash(cd \"C:\\\\Users\\\\moata\\\\Documents\\\\Al-Haj-Salim-Steel-Cement-Accounting-System\" && npx next build 2>&1 | tail -30)"
+    ]
+  }
+}
