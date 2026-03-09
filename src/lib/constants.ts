@@ -23,10 +23,10 @@ export const NAV_ITEMS = [
   { href: "/steel-daily", label: "يومية الحديد", icon: "Hammer" as const, active: true },
   { href: "/cashier-daily", label: "يومية الكاشير", icon: "Calculator" as const, active: true },
   { href: "/corrections", label: "طلبات التصحيح", icon: "ClipboardCheck" as const, active: true, adminOnly: true },
-  { href: "#", label: "الجرد", icon: "Package" as const, active: false },
-  { href: "#", label: "البنوك", icon: "Landmark" as const, active: false },
-  { href: "#", label: "العملاء", icon: "Users" as const, active: false },
-  { href: "#", label: "التقارير", icon: "BarChart3" as const, active: false },
+  { href: "/inventory", label: "الجرد", icon: "Package" as const, active: true },
+  { href: "/banks", label: "البنوك", icon: "Landmark" as const, active: true },
+  { href: "/customers", label: "العملاء", icon: "Users" as const, active: true },
+  { href: "/reports", label: "التقارير", icon: "BarChart3" as const, active: true },
 ];
 
 export const TABLE_HEADERS = {
@@ -91,8 +91,35 @@ export const MESSAGES = {
   depositDeleted: "تم حذف الإيداع بنجاح",
   cashierEntryAdded: "تم إضافة القيد بنجاح",
   cashBalanceUpdated: "تم تحديث الرصيد النقدي",
+  bankTransactionAdded: "تم إضافة العملية البنكية بنجاح",
+  bankAdded: "تم إضافة البنك بنجاح",
+  customerAdded: "تم إضافة العميل بنجاح",
+  customerUpdated: "تم تحديث بيانات العميل بنجاح",
+  customerTransactionAdded: "تم إضافة القيد بنجاح",
   error: "حدث خطأ، يرجى المحاولة مرة أخرى",
   requiredField: "هذا الحقل مطلوب",
   invalidNumber: "يرجى إدخال رقم صحيح",
   minValue: "القيمة يجب أن تكون أكبر من صفر",
+};
+
+export const BANK_TABLE_HEADERS = {
+  rowNum: "م",
+  date: "التاريخ",
+  description: "البيان",
+  debit: "مدين",
+  credit: "دائن",
+  balance: "الرصيد",
+  createdBy: "بواسطة",
+};
+
+export const CUSTOMER_TX_HEADERS = {
+  rowNum: "م",
+  date: "التاريخ",
+  description: "التفاصيل",
+  quantity: "العدد",
+  price: "السعر",
+  debit: "عليه",
+  credit: "له",
+  balance: "الرصيد",
+  createdBy: "بواسطة",
 };

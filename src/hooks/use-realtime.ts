@@ -120,6 +120,120 @@ export function useRealtimeCashier(date: string) {
   }, [date]);
 }
 
+export function useRealtimeBankTransactions(bankId: string) {
+  const router = useRouter();
+  const supabaseRef = useRef(createClient());
+
+  useEffect(() => {
+    const supabase = supabaseRef.current;
+    const channel = supabase
+      .channel(`bank-tx-${bankId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "bank_transactions",
+          filter: `bank_id=eq.${bankId}`,
+        },
+        () => {
+          router.refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bankId]);
+}
+
+export function useRealtimeCustomerTransactions(customerId: string) {
+  const router = useRouter();
+  const supabaseRef = useRef(createClient());
+
+  useEffect(() => {
+    const supabase = supabaseRef.current;
+    const channel = supabase
+      .channel(`customer-tx-${customerId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "customer_transactions",
+          filter: `customer_id=eq.${customerId}`,
+        },
+        () => {
+          router.refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId]);
+}
+
+export function useRealtimeCustomers() {
+  const router = useRouter();
+  const supabaseRef = useRef(createClient());
+
+  useEffect(() => {
+    const supabase = supabaseRef.current;
+    const channel = supabase
+      .channel("customers-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "customers",
+        },
+        () => {
+          router.refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
+export function useRealtimeBanks() {
+  const router = useRouter();
+  const supabaseRef = useRef(createClient());
+
+  useEffect(() => {
+    const supabase = supabaseRef.current;
+    const channel = supabase
+      .channel("banks-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "banks",
+        },
+        () => {
+          router.refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
 export function useRealtimeCorrections() {
   const router = useRouter();
   const supabaseRef = useRef(createClient());
