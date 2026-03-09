@@ -184,3 +184,61 @@ export interface CorrectionRequestWithRelations extends CorrectionRequest {
   requester: Pick<Profile, "id" | "full_name">;
   reviewer: Pick<Profile, "id" | "full_name"> | null;
 }
+
+// Bank Accounts (حسابات البنوك)
+export interface Bank {
+  id: string;
+  name: string;
+  account_number: string | null;
+  balance: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BankTransaction {
+  id: string;
+  bank_id: string;
+  entry_date: string;
+  description: string;
+  debit: number;
+  credit: number;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  row_number: number;
+  is_corrected: boolean;
+  correction_of_id: string | null;
+  corrected_by_entry_id: string | null;
+  correction_reason: string | null;
+}
+
+export interface BankTransactionWithCreator extends BankTransaction {
+  creator: Pick<Profile, "id" | "full_name">;
+}
+
+// Customer Transactions (كشف حساب العميل)
+export interface CustomerTransaction {
+  id: string;
+  customer_id: string;
+  entry_date: string;
+  description: string;
+  quantity: number | null;
+  price: number | null;
+  debit: number;
+  credit: number;
+  notes: string | null;
+  source_type: string | null;
+  source_id: string | null;
+  created_by: string;
+  created_at: string;
+  row_number: number;
+  is_corrected: boolean;
+  correction_of_id: string | null;
+  corrected_by_entry_id: string | null;
+  correction_reason: string | null;
+}
+
+export interface CustomerTransactionWithCreator extends CustomerTransaction {
+  creator: Pick<Profile, "id" | "full_name">;
+}
