@@ -103,9 +103,10 @@ export const MESSAGES = {
 };
 
 export const BANK_TABLE_HEADERS = {
-  rowNum: "م",
+  rowNum: "الرقم",
+  bankName: "اسم البنك",
   date: "التاريخ",
-  description: "البيان",
+  name: "الاسم",
   debit: "مدين",
   credit: "دائن",
   balance: "الرصيد",
@@ -121,5 +122,6 @@ export const CUSTOMER_TX_HEADERS = {
   debit: "عليه",
   credit: "له",
   balance: "الرصيد",
+  source: "مصدر الدفع",
   createdBy: "بواسطة",
 };

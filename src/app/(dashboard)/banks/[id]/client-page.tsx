@@ -43,7 +43,7 @@ export function BankDetailClient({ bank, transactions }: BankDetailClientProps) 
       <div className="flex items-center justify-between py-4">
         <div className="flex items-center gap-3">
           <Link href="/banks">
-            <Button variant="ghost" size="sm" className="gap-1"><ArrowRight className="h-4 w-4" />البنوك</Button>
+            <Button variant="ghost" size="sm" className="gap-1"><ArrowRight className="h-4 w-4" />الصفحة الرئيسية</Button>
           </Link>
           <h3 className="text-lg font-bold">{bank.name}</h3>
         </div>
@@ -59,16 +59,16 @@ export function BankDetailClient({ bank, transactions }: BankDetailClientProps) 
 
       <div className="grid grid-cols-3 gap-4 mb-4">
         <Card><CardContent className="p-4">
-          <p className="text-sm text-muted-foreground">الرصيد الافتتاحي</p>
-          <p className="text-xl font-bold">{formatCurrency(bank.balance)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <p className="text-sm text-muted-foreground">إجمالي مدين (سحب)</p>
+          <p className="text-sm text-muted-foreground">إجمالي مدين</p>
           <p className="text-xl font-bold text-red-600">{formatCurrency(totalDebit)}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4">
-          <p className="text-sm text-muted-foreground">الرصيد الحالي</p>
-          <p className="text-xl font-bold text-green-600">{formatCurrency(currentBalance)}</p>
+          <p className="text-sm text-muted-foreground">إجمالي دائن</p>
+          <p className="text-xl font-bold text-green-600">{formatCurrency(totalCredit)}</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <p className="text-sm text-muted-foreground">{BANK_TABLE_HEADERS.balance}</p>
+          <p className="text-xl font-bold">{formatCurrency(currentBalance)}</p>
         </CardContent></Card>
       </div>
 
@@ -78,7 +78,7 @@ export function BankDetailClient({ bank, transactions }: BankDetailClientProps) 
             <TableRow>
               <TableHead className="text-start w-[50px]">{BANK_TABLE_HEADERS.rowNum}</TableHead>
               <TableHead className="text-start">{BANK_TABLE_HEADERS.date}</TableHead>
-              <TableHead className="text-start">{BANK_TABLE_HEADERS.description}</TableHead>
+              <TableHead className="text-start">{BANK_TABLE_HEADERS.name}</TableHead>
               <TableHead className="text-start">{BANK_TABLE_HEADERS.debit}</TableHead>
               <TableHead className="text-start">{BANK_TABLE_HEADERS.credit}</TableHead>
               <TableHead className="text-start">{BANK_TABLE_HEADERS.balance}</TableHead>
@@ -86,13 +86,25 @@ export function BankDetailClient({ bank, transactions }: BankDetailClientProps) 
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* Opening balance row */}
+            {rows.length > 0 && (
+              <TableRow className="bg-muted/30">
+                <TableCell></TableCell>
+                <TableCell></TableCell>
+                <TableCell className="font-medium">رصيد افتتاحي</TableCell>
+                <TableCell></TableCell>
+                <TableCell className="text-green-600 font-semibold">{formatCurrency(bank.balance)}</TableCell>
+                <TableCell className="font-bold">{formatCurrency(bank.balance)}</TableCell>
+                <TableCell></TableCell>
+              </TableRow>
+            )}
             {rows.length ? rows.map((entry, index) => (
               <TableRow key={entry.id} className={cn(entry.is_corrected && "opacity-50 line-through", entry.correction_of_id && "bg-green-50")}>
                 <TableCell>{index + 1}</TableCell>
                 <TableCell>{formatDate(entry.entry_date)}</TableCell>
                 <TableCell>{entry.description}</TableCell>
-                <TableCell className={entry.debit > 0 ? "text-red-600 font-semibold" : ""}>{entry.debit > 0 ? formatCurrency(entry.debit) : "—"}</TableCell>
-                <TableCell className={entry.credit > 0 ? "text-green-600 font-semibold" : ""}>{entry.credit > 0 ? formatCurrency(entry.credit) : "—"}</TableCell>
+                <TableCell className={entry.debit > 0 ? "text-red-600 font-semibold" : ""}>{entry.debit > 0 ? formatCurrency(entry.debit) : ""}</TableCell>
+                <TableCell className={entry.credit > 0 ? "text-green-600 font-semibold" : ""}>{entry.credit > 0 ? formatCurrency(entry.credit) : ""}</TableCell>
                 <TableCell className="font-bold">{formatCurrency(entry.runningBalance)}</TableCell>
                 <TableCell>{entry.creator?.full_name ?? "—"}</TableCell>
               </TableRow>

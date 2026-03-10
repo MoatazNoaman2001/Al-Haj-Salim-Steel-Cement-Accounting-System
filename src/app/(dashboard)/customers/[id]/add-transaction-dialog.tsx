@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v4";
@@ -14,8 +15,12 @@ import {
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import type { Bank } from "@/types/database";
 
 const schema = z.object({
   entry_date: z.string().min(1, "التاريخ مطلوب"),
@@ -24,6 +29,7 @@ const schema = z.object({
   price: z.string().optional(),
   debit: z.string(),
   credit: z.string(),
+  bank_id: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -33,16 +39,27 @@ interface AddCustomerTransactionDialogProps {
   onOpenChange: (open: boolean) => void;
   customerId: string;
   userId: string;
+  banks: Bank[];
+  customerName: string;
 }
 
-export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, userId }: AddCustomerTransactionDialogProps) {
+export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, userId, banks, customerName }: AddCustomerTransactionDialogProps) {
   const supabase = createClient();
   const router = useRouter();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { entry_date: todayISO(), description: "", quantity: "", price: "", debit: "0", credit: "0" },
+    defaultValues: { entry_date: todayISO(), description: "", quantity: "", price: "", debit: "0", credit: "0", bank_id: "" },
   });
+
+  const creditValue = Number(form.watch("credit")) || 0;
+
+  // Clear bank selection when credit is 0
+  useEffect(() => {
+    if (creditValue === 0) {
+      form.setValue("bank_id", "");
+    }
+  }, [creditValue, form]);
 
   async function onSubmit(values: FormValues) {
     const debit = Number(values.debit) || 0;
@@ -50,6 +67,13 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
 
     if (debit === 0 && credit === 0) { toast.error("يجب إدخال قيمة في عليه أو له"); return; }
 
+    // If credit > 0 and bank selected, require bank
+    if (credit > 0 && !values.bank_id) {
+      toast.error("يرجى اختيار مصدر الدفع (البنك)");
+      return;
+    }
+
+    // Insert customer transaction
     const { error } = await supabase.from("customer_transactions").insert({
       customer_id: customerId,
       entry_date: values.entry_date,
@@ -57,14 +81,32 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
       quantity: values.quantity ? Number(values.quantity) : null,
       price: values.price ? Number(values.price) : null,
       debit, credit,
-      source_type: "manual",
+      source_type: values.bank_id ? "bank" : "manual",
+      source_id: values.bank_id || null,
       created_by: userId,
     });
 
     if (error) { toast.error(MESSAGES.error); return; }
 
+    // If payment via bank, also create bank transaction (debit = money going out of bank to customer)
+    if (credit > 0 && values.bank_id) {
+      const { error: bankError } = await supabase.from("bank_transactions").insert({
+        bank_id: values.bank_id,
+        entry_date: values.entry_date,
+        description: customerName,
+        debit: credit,
+        credit: 0,
+        created_by: userId,
+      });
+
+      if (bankError) {
+        toast.error("تم حفظ قيد العميل لكن فشل تسجيل العملية البنكية");
+        return;
+      }
+    }
+
     toast.success(MESSAGES.customerTransactionAdded);
-    form.reset({ entry_date: todayISO(), description: "", quantity: "", price: "", debit: "0", credit: "0" });
+    form.reset({ entry_date: todayISO(), description: "", quantity: "", price: "", debit: "0", credit: "0", bank_id: "" });
     onOpenChange(false);
     router.refresh();
   }
@@ -97,6 +139,31 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
                 <FormItem><FormLabel>له</FormLabel><FormControl><Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
               )} />
             </div>
+
+            {/* Bank selector — shown when credit > 0 */}
+            {creditValue > 0 && (
+              <FormField control={form.control} name="bank_id" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>مصدر الدفع (البنك) <span className="text-destructive">*</span></FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر البنك أو المحفظة" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {banks.map((bank) => (
+                        <SelectItem key={bank.id} value={bank.id}>
+                          {bank.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
+
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? "جاري الحفظ..." : "حفظ"}</Button>
