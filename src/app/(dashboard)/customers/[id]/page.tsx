@@ -16,18 +16,29 @@ export default async function CustomerDetailPage({ params }: PageProps) {
 
   if (!customer) notFound();
 
-  const { data: transactions } = await supabase
-    .from("customer_transactions")
-    .select(`*, creator:profiles!created_by(id, full_name)`)
-    .eq("customer_id", id)
-    .order("entry_date", { ascending: true })
-    .order("row_number", { ascending: true });
+  const [{ data: transactions }, { data: banks }] = await Promise.all([
+    supabase
+      .from("customer_transactions")
+      .select(`*, creator:profiles!created_by(id, full_name)`)
+      .eq("customer_id", id)
+      .order("entry_date", { ascending: true })
+      .order("row_number", { ascending: true }),
+    supabase
+      .from("banks")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: true }),
+  ]);
 
   return (
     <div className="flex flex-col h-full">
       <Header title={`كشف حساب: ${customer.name}`} />
       <div className="flex-1 overflow-auto px-6 pb-6">
-        <CustomerDetailClient customer={customer} transactions={transactions ?? []} />
+        <CustomerDetailClient
+          customer={customer}
+          transactions={transactions ?? []}
+          banks={banks ?? []}
+        />
       </div>
     </div>
   );

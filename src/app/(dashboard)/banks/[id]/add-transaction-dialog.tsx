@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 
 const schema = z.object({
   entry_date: z.string().min(1, "التاريخ مطلوب"),
-  description: z.string().min(1, "البيان مطلوب"),
+  description: z.string().min(1, "الاسم مطلوب"),
   debit: z.string(),
   credit: z.string(),
 });
@@ -71,14 +71,14 @@ export function AddBankTransactionDialog({ open, onOpenChange, bankId, userId }:
               <FormItem><FormLabel>التاريخ</FormLabel><FormControl><Input type="date" {...field} dir="ltr" /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="description" render={({ field }) => (
-              <FormItem><FormLabel>البيان</FormLabel><FormControl><Input {...field} placeholder="مثال: إيداع نقدي" /></FormControl><FormMessage /></FormItem>
+              <FormItem><FormLabel>الاسم</FormLabel><FormControl><Input {...field} placeholder="مثال: إيداع نقدي" /></FormControl><FormMessage /></FormItem>
             )} />
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="debit" render={({ field }) => (
-                <FormItem><FormLabel>مدين (سحب)</FormLabel><FormControl><Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>مدين</FormLabel><FormControl><Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="credit" render={({ field }) => (
-                <FormItem><FormLabel>دائن (إيداع)</FormLabel><FormControl><Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>دائن</FormLabel><FormControl><Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
               )} />
             </div>
             <div className="flex justify-end gap-2 pt-2">

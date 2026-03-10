@@ -14,18 +14,26 @@ import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
 import { useRealtimeCustomerTransactions } from "@/hooks/use-realtime";
 import { AddCustomerTransactionDialog } from "./add-transaction-dialog";
-import type { Customer, CustomerTransactionWithCreator } from "@/types/database";
+import type { Customer, CustomerTransactionWithCreator, Bank } from "@/types/database";
 
 interface CustomerDetailClientProps {
   customer: Customer;
   transactions: CustomerTransactionWithCreator[];
+  banks: Bank[];
 }
 
-export function CustomerDetailClient({ customer, transactions }: CustomerDetailClientProps) {
+export function CustomerDetailClient({ customer, transactions, banks }: CustomerDetailClientProps) {
   const { userId } = useUser();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   useRealtimeCustomerTransactions(customer.id);
+
+  // Build bank name lookup
+  const bankNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    banks.forEach((b) => { map[b.id] = b.name; });
+    return map;
+  }, [banks]);
 
   const { rows, totalDebit, totalCredit, finalBalance } = useMemo(() => {
     let runningBalance = 0;
@@ -93,6 +101,7 @@ export function CustomerDetailClient({ customer, transactions }: CustomerDetailC
               <TableHead className="text-start">{CUSTOMER_TX_HEADERS.debit}</TableHead>
               <TableHead className="text-start">{CUSTOMER_TX_HEADERS.credit}</TableHead>
               <TableHead className="text-start">{CUSTOMER_TX_HEADERS.balance}</TableHead>
+              <TableHead className="text-start">{CUSTOMER_TX_HEADERS.source}</TableHead>
               <TableHead className="text-start">{CUSTOMER_TX_HEADERS.createdBy}</TableHead>
             </TableRow>
           </TableHeader>
@@ -102,15 +111,18 @@ export function CustomerDetailClient({ customer, transactions }: CustomerDetailC
                 <TableCell>{index + 1}</TableCell>
                 <TableCell>{formatDate(entry.entry_date)}</TableCell>
                 <TableCell>{entry.description}</TableCell>
-                <TableCell>{entry.quantity != null ? entry.quantity : "—"}</TableCell>
-                <TableCell>{entry.price != null ? formatCurrency(entry.price) : "—"}</TableCell>
-                <TableCell className={entry.debit > 0 ? "text-red-600 font-semibold" : ""}>{entry.debit > 0 ? formatCurrency(entry.debit) : "—"}</TableCell>
-                <TableCell className={entry.credit > 0 ? "text-green-600 font-semibold" : ""}>{entry.credit > 0 ? formatCurrency(entry.credit) : "—"}</TableCell>
+                <TableCell>{entry.quantity != null ? entry.quantity : ""}</TableCell>
+                <TableCell>{entry.price != null ? formatCurrency(entry.price) : ""}</TableCell>
+                <TableCell className={entry.debit > 0 ? "text-red-600 font-semibold" : ""}>{entry.debit > 0 ? formatCurrency(entry.debit) : ""}</TableCell>
+                <TableCell className={entry.credit > 0 ? "text-green-600 font-semibold" : ""}>{entry.credit > 0 ? formatCurrency(entry.credit) : ""}</TableCell>
                 <TableCell className={cn("font-bold", entry.runningBalance > 0 ? "text-red-600" : "text-green-600")}>{formatCurrency(entry.runningBalance)}</TableCell>
-                <TableCell>{entry.creator?.full_name ?? "—"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {entry.source_type === "bank" && entry.source_id ? bankNameMap[entry.source_id] ?? "" : ""}
+                </TableCell>
+                <TableCell>{entry.creator?.full_name ?? ""}</TableCell>
               </TableRow>
             )) : (
-              <TableRow><TableCell colSpan={9} className="h-24 text-center text-muted-foreground">لا توجد حركات لهذا العميل</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="h-24 text-center text-muted-foreground">لا توجد حركات لهذا العميل</TableCell></TableRow>
             )}
           </TableBody>
           {rows.length > 0 && (
@@ -121,13 +133,21 @@ export function CustomerDetailClient({ customer, transactions }: CustomerDetailC
                 <TableCell className="text-green-600">{formatCurrency(totalCredit)}</TableCell>
                 <TableCell className={cn("font-bold", finalBalance > 0 ? "text-red-600" : "text-green-600")}>{formatCurrency(finalBalance)}</TableCell>
                 <TableCell />
+                <TableCell />
               </TableRow>
             </TableFooter>
           )}
         </Table>
       </div>
 
-      <AddCustomerTransactionDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} customerId={customer.id} userId={userId} />
+      <AddCustomerTransactionDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        customerId={customer.id}
+        userId={userId}
+        banks={banks}
+        customerName={customer.name}
+      />
     </div>
   );
 }
