@@ -20,28 +20,43 @@ export default async function CorrectionsPage() {
 
   if (profile?.role !== "admin") redirect("/cement-daily");
 
-  const { data: requests } = await supabase
-    .from("correction_requests")
-    .select(
-      `
-      *,
-      entry:daily_cement!entry_id(
+  const [{ data: corrections }, { data: actionRequests }] = await Promise.all([
+    supabase
+      .from("correction_requests")
+      .select(
+        `
         *,
-        customer:customers!customer_id(id, name),
-        product:products!product_id(id, name),
-        creator:profiles!created_by(id, full_name)
-      ),
-      requester:profiles!requested_by(id, full_name),
-      reviewer:profiles!reviewed_by(id, full_name)
-    `
-    )
-    .order("created_at", { ascending: false });
+        entry:daily_cement!entry_id(
+          *,
+          customer:customers!customer_id(id, name),
+          product:products!product_id(id, name),
+          creator:profiles!created_by(id, full_name)
+        ),
+        requester:profiles!requested_by(id, full_name),
+        reviewer:profiles!reviewed_by(id, full_name)
+      `
+      )
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("action_requests")
+      .select(
+        `
+        *,
+        requester:profiles!requested_by(id, full_name),
+        reviewer:profiles!reviewed_by(id, full_name)
+      `
+      )
+      .order("created_at", { ascending: false }),
+  ]);
 
   return (
     <div className="flex flex-col h-full">
-      <Header title="طلبات التصحيح" />
+      <Header title="طلبات التصحيح والإجراءات" />
       <div className="flex-1 overflow-auto px-6 pb-6">
-        <CorrectionsClient requests={requests ?? []} />
+        <CorrectionsClient
+          requests={corrections ?? []}
+          actionRequests={actionRequests ?? []}
+        />
       </div>
     </div>
   );
