@@ -261,3 +261,31 @@ export function useRealtimeCorrections() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }
+
+export function useRealtimeActionRequests() {
+  const router = useRouter();
+  const supabaseRef = useRef(createClient());
+
+  useEffect(() => {
+    const supabase = supabaseRef.current;
+    const channel = supabase
+      .channel("action-requests-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "action_requests",
+        },
+        () => {
+          router.refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}

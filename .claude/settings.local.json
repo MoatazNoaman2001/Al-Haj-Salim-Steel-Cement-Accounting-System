@@ -14,7 +14,9 @@
       "Bash(cd \"C:\\\\Users\\\\moata\\\\Documents\\\\Al-Haj-Salim-Steel-Cement-Accounting-System\" && node -e \"\nconst XLSX = require\\('xlsx'\\);\nconst wb = XLSX.readFile\\('حسابات البنوك \\(1\\).xlsx'\\);\n\nconst s = wb.Sheets['البنوك'];\nconsole.log\\('=== البنوك sheet ==='\\);\nconsole.log\\('Range:', s['!ref']\\);\nconst range = XLSX.utils.decode_range\\(s['!ref']\\);\nfor \\(let r = range.s.r; r <= Math.min\\(range.e.r, 40\\); r++\\) {\n  let row = [];\n  for \\(let c = range.s.c; c <= range.e.c; c++\\) {\n    const cell = s[XLSX.utils.encode_cell\\({r, c}\\)];\n    row.push\\(cell ? cell.v : ''\\);\n  }\n  if \\(row.some\\(v => v !== ''\\)\\) {\n    console.log\\('Row ' + r + ': ' + JSON.stringify\\(row\\)\\);\n  }\n}\n\")",
       "Bash(cd \"C:\\\\Users\\\\moata\\\\Documents\\\\Al-Haj-Salim-Steel-Cement-Accounting-System\" && npx next build 2>&1 | tail -25)",
       "Bash(cd \"C:\\\\Users\\\\moata\\\\Documents\\\\Al-Haj-Salim-Steel-Cement-Accounting-System\" && npx shadcn@latest add alert-dialog -y 2>&1 | tail -5)",
-      "Bash(cd \"C:\\\\Users\\\\moata\\\\Documents\\\\Al-Haj-Salim-Steel-Cement-Accounting-System\" && npx shadcn@latest add alert-dialog --overwrite -y 2>&1 | tail -10)"
+      "Bash(cd \"C:\\\\Users\\\\moata\\\\Documents\\\\Al-Haj-Salim-Steel-Cement-Accounting-System\" && npx shadcn@latest add alert-dialog --overwrite -y 2>&1 | tail -10)",
+      "Bash(npx next:*)",
+      "Bash(npx shadcn@latest add tabs --yes 2>&1 | tail -5)"
     ]
   }
 }

@@ -242,3 +242,27 @@ export interface CustomerTransaction {
 export interface CustomerTransactionWithCreator extends CustomerTransaction {
   creator: Pick<Profile, "id" | "full_name">;
 }
+
+// Action Requests (طلبات التعديل والحذف)
+export type ActionType = "edit" | "delete";
+export type EntityType = "bank" | "bank_transaction" | "customer" | "customer_transaction";
+
+export interface ActionRequest {
+  id: string;
+  action: ActionType;
+  entity: EntityType;
+  entity_id: string;
+  proposed_changes: Record<string, unknown> | null;
+  reason: string;
+  status: CorrectionStatus;
+  requested_by: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+}
+
+export interface ActionRequestWithRelations extends ActionRequest {
+  requester: Pick<Profile, "id" | "full_name">;
+  reviewer: Pick<Profile, "id" | "full_name"> | null;
+}

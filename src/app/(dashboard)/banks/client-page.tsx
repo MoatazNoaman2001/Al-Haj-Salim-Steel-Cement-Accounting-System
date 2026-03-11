@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Landmark, Plus } from "lucide-react";
+import { Landmark, Plus, Pencil, Trash2 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -14,6 +14,8 @@ import { formatCurrency } from "@/lib/utils";
 import { useRealtimeBanks } from "@/hooks/use-realtime";
 import { useUser } from "@/hooks/use-user";
 import { AddBankDialog } from "./add-bank-dialog";
+import { EditBankDialog } from "./edit-bank-dialog";
+import { DeleteBankDialog } from "./delete-bank-dialog";
 import type { Bank } from "@/types/database";
 
 interface BankWithTotals extends Bank {
@@ -29,6 +31,8 @@ interface BanksClientProps {
 export function BanksClient({ banks }: BanksClientProps) {
   const { isAdmin } = useUser();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editBank, setEditBank] = useState<BankWithTotals | null>(null);
+  const [deleteBank, setDeleteBank] = useState<BankWithTotals | null>(null);
 
   useRealtimeBanks();
 
@@ -70,11 +74,12 @@ export function BanksClient({ banks }: BanksClientProps) {
               <TableHead className="text-start">{BANK_TABLE_HEADERS.debit}</TableHead>
               <TableHead className="text-start">{BANK_TABLE_HEADERS.credit}</TableHead>
               <TableHead className="text-start">{BANK_TABLE_HEADERS.balance}</TableHead>
+              <TableHead className="text-start w-[100px]">إجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {banks.length ? banks.map((bank, index) => (
-              <TableRow key={bank.id} className="cursor-pointer hover:bg-muted/50">
+              <TableRow key={bank.id} className="hover:bg-muted/50">
                 <TableCell>{index + 1}</TableCell>
                 <TableCell className="font-medium">
                   <Link href={`/banks/${bank.id}`} className="hover:underline">
@@ -84,9 +89,19 @@ export function BanksClient({ banks }: BanksClientProps) {
                 <TableCell className="text-red-600">{formatCurrency(bank.totalDebit)}</TableCell>
                 <TableCell className="text-green-600">{formatCurrency(bank.totalCredit)}</TableCell>
                 <TableCell className="font-bold">{formatCurrency(bank.currentBalance)}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditBank(bank)} title="طلب تعديل">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteBank(bank)} title="طلب حذف">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </TableCell>
               </TableRow>
             )) : (
-              <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">لا توجد حسابات بنكية</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">لا توجد حسابات بنكية</TableCell></TableRow>
             )}
           </TableBody>
           {banks.length > 0 && (
@@ -96,6 +111,7 @@ export function BanksClient({ banks }: BanksClientProps) {
                 <TableCell className="text-red-600">{formatCurrency(grandDebit)}</TableCell>
                 <TableCell className="text-green-600">{formatCurrency(grandCredit)}</TableCell>
                 <TableCell className="font-bold">{formatCurrency(grandBalance)}</TableCell>
+                <TableCell />
               </TableRow>
             </TableFooter>
           )}
@@ -103,6 +119,8 @@ export function BanksClient({ banks }: BanksClientProps) {
       </div>
 
       <AddBankDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
+      <EditBankDialog bank={editBank} onClose={() => setEditBank(null)} />
+      <DeleteBankDialog bank={deleteBank} onClose={() => setDeleteBank(null)} />
     </div>
   );
 }

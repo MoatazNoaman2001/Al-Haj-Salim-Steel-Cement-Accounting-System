@@ -22,14 +22,38 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { Bank, BankTransactionWithCreator } from "@/types/database";
+import { Separator } from "@/components/ui/separator";
+import type { Bank, BankTransactionWithCreator, ActionRequestWithRelations } from "@/types/database";
 
 interface BankDetailClientProps {
   bank: Bank;
   transactions: BankTransactionWithCreator[];
+  editHistory: ActionRequestWithRelations[];
 }
 
-export function BankDetailClient({ bank, transactions }: BankDetailClientProps) {
+const ACTION_LABELS: Record<string, string> = {
+  edit: "تعديل",
+  delete: "حذف",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: "بانتظار المراجعة",
+  approved: "تمت الموافقة",
+  rejected: "مرفوض",
+};
+
+const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"> = {
+  pending: "default",
+  approved: "secondary",
+  rejected: "destructive",
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  name: "الاسم",
+  balance: "الرصيد الافتتاحي",
+};
+
+export function BankDetailClient({ bank, transactions, editHistory }: BankDetailClientProps) {
   const { userId, isAdmin } = useUser();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [correctionEntry, setCorrectionEntry] = useState<BankTransactionWithCreator | null>(null);
@@ -190,6 +214,70 @@ export function BankDetailClient({ bank, transactions }: BankDetailClientProps) 
           )}
         </Table>
       </div>
+
+      {/* Edit History Section */}
+      {editHistory.length > 0 && (
+        <div className="mt-6">
+          <Separator className="mb-4" />
+          <h3 className="text-lg font-bold mb-3">سجل التعديلات</h3>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-start">التاريخ</TableHead>
+                  <TableHead className="text-start">الإجراء</TableHead>
+                  <TableHead className="text-start">التغييرات</TableHead>
+                  <TableHead className="text-start">السبب</TableHead>
+                  <TableHead className="text-start">طلب بواسطة</TableHead>
+                  <TableHead className="text-start">الحالة</TableHead>
+                  <TableHead className="text-start">راجع بواسطة</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {editHistory.map((req) => {
+                  const changes = req.proposed_changes as Record<string, unknown> | null;
+                  return (
+                    <TableRow key={req.id}>
+                      <TableCell className="whitespace-nowrap">{formatDate(req.created_at)}</TableCell>
+                      <TableCell>
+                        <Badge variant={req.action === "delete" ? "destructive" : "outline"}>
+                          {ACTION_LABELS[req.action]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {req.action === "edit" && changes ? (
+                          <div className="flex flex-wrap gap-1">
+                            {Object.entries(changes).map(([field, value]) => (
+                              <Badge key={field} variant="secondary" className="text-xs">
+                                {FIELD_LABELS[field] ?? field}: {typeof value === "number" ? formatCurrency(value) : String(value)}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-destructive text-sm">حذف كامل</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate text-sm">{req.reason}</TableCell>
+                      <TableCell>{req.requester?.full_name ?? "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant={STATUS_VARIANT[req.status]}>
+                          {STATUS_LABELS[req.status]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {req.reviewer?.full_name ?? "—"}
+                        {req.rejection_reason && (
+                          <p className="text-xs text-destructive mt-1">{req.rejection_reason}</p>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
 
       <AddBankTransactionDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} bankId={bank.id} userId={userId} />
       <BankCorrectionDialog entry={correctionEntry} onClose={() => setCorrectionEntry(null)} userId={userId} />
