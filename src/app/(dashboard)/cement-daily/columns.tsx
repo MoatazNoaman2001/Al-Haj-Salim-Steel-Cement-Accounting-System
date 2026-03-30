@@ -106,6 +106,21 @@ export function getBaseColumns(
       size: 100,
     },
     {
+      id: "total_transport",
+      header: TABLE_HEADERS.totalTransport,
+      cell: ({ row }) => {
+        const val = (row.original.quantity ?? 0) * (row.original.transport_cost ?? 0);
+        return formatCurrency(val);
+      },
+      size: 120,
+    },
+    {
+      accessorKey: "driver_name",
+      header: TABLE_HEADERS.driver,
+      cell: ({ getValue }) => (getValue() as string | null) ?? "—",
+      size: 100,
+    },
+    {
       accessorKey: "notes",
       header: TABLE_HEADERS.notes,
       cell: ({ getValue }) => {
@@ -195,6 +210,23 @@ export function getAdminColumns(): ColumnDef<DailyCementWithRelations>[] {
         return (
           <span className={val != null && val > 0 ? "text-green-600 font-semibold" : ""}>
             {formatCurrency(val)}
+          </span>
+        );
+      },
+      size: 120,
+    },
+    {
+      id: "profit_loss",
+      header: TABLE_HEADERS.profitLoss,
+      cell: ({ row }) => {
+        const entry = row.original;
+        if (entry.cost_per_ton == null) return "—";
+        const totalCost = (entry.cost_per_ton + entry.transport_cost) * entry.quantity;
+        const totalSelling = entry.price_per_ton * entry.quantity;
+        const profitLoss = totalSelling - totalCost;
+        return (
+          <span className={profitLoss >= 0 ? "text-green-600 font-semibold" : "text-destructive font-semibold"}>
+            {formatCurrency(profitLoss)}
           </span>
         );
       },

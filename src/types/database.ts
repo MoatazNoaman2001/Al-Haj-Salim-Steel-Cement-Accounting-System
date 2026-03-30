@@ -40,6 +40,7 @@ export interface DailyCement {
   amount_paid: number;
   remaining_balance: number; // generated
   transport_cost: number;
+  driver_name: string | null;
   notes: string | null;
   cost_per_ton: number | null;
   profit_per_ton: number | null; // generated
@@ -68,6 +69,7 @@ export interface DailyCementInsert {
   price_per_ton: number;
   amount_paid: number;
   transport_cost: number;
+  driver_name?: string | null;
   notes?: string;
   cost_per_ton?: number | null;
   created_by: string;

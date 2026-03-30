@@ -48,6 +48,14 @@ export function DataTable({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [customerFilter, setCustomerFilter] = useState("");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [localCustomers, setLocalCustomers] = useState(customers);
+
+  const handleCustomerAdded = useCallback(
+    (customer: Pick<Customer, "id" | "name">) => {
+      setLocalCustomers((prev) => [...prev, customer]);
+    },
+    []
+  );
   const [correctionEntry, setCorrectionEntry] =
     useState<DailyCementWithRelations | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
@@ -92,8 +100,17 @@ export function DataTable({
       amountPaid: activeRows.reduce((s, r) => s + (r.original.amount_paid ?? 0), 0),
       remaining: activeRows.reduce((s, r) => s + (r.original.remaining_balance ?? 0), 0),
       transport: activeRows.reduce((s, r) => s + (r.original.transport_cost ?? 0), 0),
+      totalTransport: activeRows.reduce((s, r) => s + ((r.original.quantity ?? 0) * (r.original.transport_cost ?? 0)), 0),
       totalProfit: isAdmin
         ? activeRows.reduce((s, r) => s + (r.original.total_profit ?? 0), 0)
+        : null,
+      profitLoss: isAdmin
+        ? activeRows.reduce((s, r) => {
+            if (r.original.cost_per_ton == null) return s;
+            const totalCost = (r.original.cost_per_ton + r.original.transport_cost) * r.original.quantity;
+            const totalSelling = r.original.price_per_ton * r.original.quantity;
+            return s + (totalSelling - totalCost);
+          }, 0)
         : null,
     };
   }, [table, isAdmin]);
@@ -218,6 +235,10 @@ export function DataTable({
                   <TableCell className="whitespace-nowrap">
                     {formatCurrency(totals.transport)}
                   </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {formatCurrency(totals.totalTransport)}
+                  </TableCell>
+                  <TableCell />
                   {isAdmin && (
                     <>
                       <TableCell />
@@ -226,10 +247,13 @@ export function DataTable({
                       <TableCell className="whitespace-nowrap text-green-600">
                         {formatCurrency(totals.totalProfit)}
                       </TableCell>
+                      <TableCell className={`whitespace-nowrap font-semibold ${(totals.profitLoss ?? 0) >= 0 ? "text-green-600" : "text-destructive"}`}>
+                        {formatCurrency(totals.profitLoss)}
+                      </TableCell>
                     </>
                   )}
                   <TableCell
-                    colSpan={isAdmin ? 3 : 4}
+                    colSpan={isAdmin ? 2 : 3}
                   />
                 </TableRow>
               </TableFooter>
@@ -241,17 +265,18 @@ export function DataTable({
       <AddEntryDialog
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
-        customers={customers}
+        customers={localCustomers}
         products={products}
         date={initialDate}
         userId={userId}
         isAdmin={isAdmin}
+        onCustomerAdded={handleCustomerAdded}
       />
 
       <CorrectionRequestDialog
         entry={correctionEntry}
         onClose={() => setCorrectionEntry(null)}
-        customers={customers}
+        customers={localCustomers}
         products={products}
       />
     </>

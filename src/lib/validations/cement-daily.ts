@@ -20,6 +20,7 @@ export const addEntrySchema = z.object({
   price_per_ton: positiveNumericString("السعر يجب أن يكون أكبر من صفر"),
   amount_paid: nonNegativeNumericString("المبلغ لا يمكن أن يكون سالب"),
   transport_cost: nonNegativeNumericString("النولون لا يمكن أن يكون سالب"),
+  driver_name: z.string().optional(),
   cost_per_ton: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -34,6 +35,7 @@ export const correctionRequestSchema = z.object({
   price_per_ton: positiveNumericString("السعر يجب أن يكون أكبر من صفر"),
   amount_paid: nonNegativeNumericString("المبلغ لا يمكن أن يكون سالب"),
   transport_cost: nonNegativeNumericString("النولون لا يمكن أن يكون سالب"),
+  driver_name: z.string().optional(),
   notes: z.string().optional(),
 });
 

@@ -16,7 +16,11 @@
       "Bash(cd \"C:\\\\Users\\\\moata\\\\Documents\\\\Al-Haj-Salim-Steel-Cement-Accounting-System\" && npx shadcn@latest add alert-dialog -y 2>&1 | tail -5)",
       "Bash(cd \"C:\\\\Users\\\\moata\\\\Documents\\\\Al-Haj-Salim-Steel-Cement-Accounting-System\" && npx shadcn@latest add alert-dialog --overwrite -y 2>&1 | tail -10)",
       "Bash(npx next:*)",
-      "Bash(npx shadcn@latest add tabs --yes 2>&1 | tail -5)"
+      "Bash(npx shadcn@latest add tabs --yes 2>&1 | tail -5)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(cd:*)"
     ]
   }
 }

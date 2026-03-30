@@ -60,6 +60,7 @@ export function CorrectionRequestDialog({
           price_per_ton: String(entry.price_per_ton),
           amount_paid: String(entry.amount_paid),
           transport_cost: String(entry.transport_cost),
+          driver_name: entry.driver_name ?? "",
           notes: entry.notes ?? "",
         }
       : undefined,
@@ -83,6 +84,8 @@ export function CorrectionRequestDialog({
       proposedChanges.amount_paid = Number(proposed.amount_paid);
     if (Number(proposed.transport_cost) !== entry.transport_cost)
       proposedChanges.transport_cost = Number(proposed.transport_cost);
+    if ((proposed.driver_name ?? "") !== (entry.driver_name ?? ""))
+      proposedChanges.driver_name = proposed.driver_name || null;
     if ((proposed.notes ?? "") !== (entry.notes ?? ""))
       proposedChanges.notes = proposed.notes;
 
@@ -215,6 +218,19 @@ export function CorrectionRequestDialog({
                       <FormLabel>النولون</FormLabel>
                       <FormControl>
                         <Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="driver_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>السائق</FormLabel>
+                      <FormControl>
+                        <Input type="text" placeholder="اسم السائق" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

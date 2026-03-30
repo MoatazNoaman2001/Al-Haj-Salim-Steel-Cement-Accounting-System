@@ -40,6 +40,7 @@ interface AddEntryDialogProps {
   date: string;
   userId: string;
   isAdmin: boolean;
+  onCustomerAdded?: (customer: Pick<Customer, "id" | "name">) => void;
 }
 
 export function AddEntryDialog({
@@ -50,6 +51,7 @@ export function AddEntryDialog({
   date,
   userId,
   isAdmin,
+  onCustomerAdded,
 }: AddEntryDialogProps) {
   const supabase = createClient();
   const router = useRouter();
@@ -64,6 +66,7 @@ export function AddEntryDialog({
       price_per_ton: "0",
       amount_paid: "0",
       transport_cost: "0",
+      driver_name: "",
       cost_per_ton: "",
       notes: "",
     },
@@ -72,8 +75,10 @@ export function AddEntryDialog({
   const quantity = form.watch("quantity") || 0;
   const pricePerTon = form.watch("price_per_ton") || 0;
   const amountPaid = form.watch("amount_paid") || 0;
+  const transportCost = form.watch("transport_cost") || 0;
   const total = Number(quantity) * Number(pricePerTon);
   const remaining = total - Number(amountPaid);
+  const totalTransport = Number(quantity) * Number(transportCost);
 
   async function onSubmit(values: AddEntryFormValues) {
     const insertData: Record<string, unknown> = {
@@ -84,6 +89,7 @@ export function AddEntryDialog({
       price_per_ton: Number(values.price_per_ton),
       amount_paid: Number(values.amount_paid),
       transport_cost: Number(values.transport_cost),
+      driver_name: values.driver_name || null,
       notes: values.notes || null,
       created_by: userId,
     };
@@ -108,6 +114,7 @@ export function AddEntryDialog({
       price_per_ton: "0",
       amount_paid: "0",
       transport_cost: "0",
+      driver_name: "",
       cost_per_ton: "",
       notes: "",
     });
@@ -148,6 +155,7 @@ export function AddEntryDialog({
                         customers={customers}
                         value={field.value}
                         onChange={field.onChange}
+                        onCustomerAdded={onCustomerAdded}
                       />
                     </FormControl>
                     <FormMessage />
@@ -261,6 +269,29 @@ export function AddEntryDialog({
                         {...field}
                         dir="ltr"
                         className="text-left"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="space-y-2">
+                <label className="text-sm font-medium">إجمالي النولون</label>
+                <div className="flex h-9 items-center rounded-md border bg-muted px-3 text-sm font-semibold">
+                  {formatCurrency(totalTransport)}
+                </div>
+              </div>
+              <FormField
+                control={form.control}
+                name="driver_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>السائق</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        placeholder="اسم السائق"
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
