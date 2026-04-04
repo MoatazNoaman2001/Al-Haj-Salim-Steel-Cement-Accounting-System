@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Printer, ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { Plus, ArrowRight, Pencil, Trash2, Download } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -23,6 +23,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
+import { exportBankReport } from "@/lib/export-excel";
 import type { Bank, BankTransactionWithCreator, ActionRequestWithRelations } from "@/types/database";
 
 interface BankDetailClientProps {
@@ -104,8 +105,13 @@ export function BankDetailClient({ bank, transactions, editHistory }: BankDetail
           <h3 className="text-lg font-bold">{bank.name}</h3>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
-            <Printer className="h-4 w-4" />طباعة
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => exportBankReport(bank.name, bank.balance, rows, totalDebit, totalCredit, currentBalance)}
+          >
+            <Download className="h-4 w-4" />تصدير Excel
           </Button>
           <Button size="sm" className="gap-2" onClick={() => setAddDialogOpen(true)}>
             <Plus className="h-4 w-4" />إضافة عملية

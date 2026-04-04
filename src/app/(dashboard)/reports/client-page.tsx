@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { TrendingUp, TrendingDown, Banknote, Package, Landmark, Printer } from "lucide-react";
+import { TrendingUp, TrendingDown, Banknote, Package, Landmark, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency, formatQuantity, cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
+import { exportSummaryReport } from "@/lib/export-excel";
 import type { Product } from "@/types/database";
 
 interface ReportsClientProps {
@@ -62,8 +63,13 @@ export function ReportsClient({ cementSales, cashierEntries, deposits, banks, pr
             <Input type="date" value={toDate} onChange={(e) => router.push(`/reports?from=${fromDate}&to=${e.target.value}`)} dir="ltr" className="w-[160px]" />
           </div>
         </div>
-        <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
-          <Printer className="h-4 w-4" />طباعة
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={() => exportSummaryReport(fromDate, toDate, totalSales, totalQuantity, totalProfit, totalDeposits, cashierDebit, cashierCredit, banks, productBreakdown, isAdmin)}
+        >
+          <Download className="h-4 w-4" />تصدير Excel
         </Button>
       </div>
 

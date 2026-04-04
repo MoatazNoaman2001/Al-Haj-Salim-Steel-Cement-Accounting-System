@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { MESSAGES } from "@/lib/constants";
-import { todayISO } from "@/lib/utils";
+import { formatCurrency, todayISO } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -24,11 +24,11 @@ import type { Bank } from "@/types/database";
 
 const schema = z.object({
   entry_date: z.string().min(1, "التاريخ مطلوب"),
+  type: z.enum(["debit", "credit"]),
   description: z.string().min(1, "التفاصيل مطلوبة"),
   quantity: z.string().optional(),
   price: z.string().optional(),
-  debit: z.string(),
-  credit: z.string(),
+  amount: z.string().optional(),
   bank_id: z.string().optional(),
 });
 
@@ -49,37 +49,49 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { entry_date: todayISO(), description: "", quantity: "", price: "", debit: "0", credit: "0", bank_id: "" },
+    defaultValues: { entry_date: todayISO(), type: "debit", description: "", quantity: "", price: "", amount: "", bank_id: "" },
   });
 
-  const creditValue = Number(form.watch("credit")) || 0;
+  const txType = form.watch("type");
+  const quantity = Number(form.watch("quantity")) || 0;
+  const price = Number(form.watch("price")) || 0;
+  const calculatedAmount = quantity * price;
 
-  // Clear bank selection when credit is 0
+  // Clear bank when switching to debit
   useEffect(() => {
-    if (creditValue === 0) {
+    if (txType === "debit") {
       form.setValue("bank_id", "");
+      form.setValue("amount", "");
     }
-  }, [creditValue, form]);
+    if (txType === "credit") {
+      form.setValue("quantity", "");
+      form.setValue("price", "");
+    }
+  }, [txType, form]);
 
   async function onSubmit(values: FormValues) {
-    const debit = Number(values.debit) || 0;
-    const credit = Number(values.credit) || 0;
+    let debit = 0;
+    let credit = 0;
+    let qty: number | null = null;
+    let prc: number | null = null;
 
-    if (debit === 0 && credit === 0) { toast.error("يجب إدخال قيمة في عليه أو له"); return; }
-
-    // If credit > 0 and bank selected, require bank
-    if (credit > 0 && !values.bank_id) {
-      toast.error("يرجى اختيار مصدر الدفع (البنك)");
-      return;
+    if (values.type === "debit") {
+      qty = Number(values.quantity) || 0;
+      prc = Number(values.price) || 0;
+      debit = qty * prc;
+      if (debit <= 0) { toast.error("يجب إدخال كمية وسعر صحيحين"); return; }
+    } else {
+      credit = Number(values.amount) || 0;
+      if (credit <= 0) { toast.error("يجب إدخال مبلغ الدفع"); return; }
+      if (!values.bank_id) { toast.error("يرجى اختيار مصدر الدفع (البنك)"); return; }
     }
 
-    // Insert customer transaction
     const { error } = await supabase.from("customer_transactions").insert({
       customer_id: customerId,
       entry_date: values.entry_date,
       description: values.description,
-      quantity: values.quantity ? Number(values.quantity) : null,
-      price: values.price ? Number(values.price) : null,
+      quantity: qty,
+      price: prc,
       debit, credit,
       source_type: values.bank_id ? "bank" : "manual",
       source_id: values.bank_id || null,
@@ -88,7 +100,7 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
 
     if (error) { toast.error(MESSAGES.error); return; }
 
-    // If payment via bank, also create bank transaction (debit = money going out of bank to customer)
+    // If payment via bank, also create bank transaction
     if (credit > 0 && values.bank_id) {
       const { error: bankError } = await supabase.from("bank_transactions").insert({
         bank_id: values.bank_id,
@@ -106,7 +118,7 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
     }
 
     toast.success(MESSAGES.customerTransactionAdded);
-    form.reset({ entry_date: todayISO(), description: "", quantity: "", price: "", debit: "0", credit: "0", bank_id: "" });
+    form.reset({ entry_date: todayISO(), type: "debit", description: "", quantity: "", price: "", amount: "", bank_id: "" });
     onOpenChange(false);
     router.refresh();
   }
@@ -120,48 +132,72 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
             <FormField control={form.control} name="entry_date" render={({ field }) => (
               <FormItem><FormLabel>التاريخ</FormLabel><FormControl><Input type="date" {...field} dir="ltr" /></FormControl><FormMessage /></FormItem>
             )} />
-            <FormField control={form.control} name="description" render={({ field }) => (
-              <FormItem><FormLabel>التفاصيل</FormLabel><FormControl><Input {...field} placeholder="مثال: تحصيل نقدي" /></FormControl><FormMessage /></FormItem>
-            )} />
-            <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="quantity" render={({ field }) => (
-                <FormItem><FormLabel>العدد</FormLabel><FormControl><Input type="number" step="0.001" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="price" render={({ field }) => (
-                <FormItem><FormLabel>السعر</FormLabel><FormControl><Input type="number" step="0.01" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
-              )} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="debit" render={({ field }) => (
-                <FormItem><FormLabel>عليه</FormLabel><FormControl><Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="credit" render={({ field }) => (
-                <FormItem><FormLabel>له</FormLabel><FormControl><Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
-              )} />
-            </div>
 
-            {/* Bank selector — shown when credit > 0 */}
-            {creditValue > 0 && (
-              <FormField control={form.control} name="bank_id" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>مصدر الدفع (البنك) <span className="text-destructive">*</span></FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="اختر البنك أو المحفظة" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {banks.map((bank) => (
-                        <SelectItem key={bank.id} value={bank.id}>
-                          {bank.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
+            <FormField control={form.control} name="type" render={({ field }) => (
+              <FormItem>
+                <FormLabel>نوع القيد</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="debit">عليه (مبيعات)</SelectItem>
+                    <SelectItem value="credit">له (دفع / تحصيل)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="description" render={({ field }) => (
+              <FormItem><FormLabel>التفاصيل</FormLabel><FormControl><Input {...field} placeholder={txType === "debit" ? "مثال: عادة مصريين" : "مثال: بنك ابوظبي"} /></FormControl><FormMessage /></FormItem>
+            )} />
+
+            {txType === "debit" ? (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField control={form.control} name="quantity" render={({ field }) => (
+                    <FormItem><FormLabel>العدد / الكمية</FormLabel><FormControl><Input type="number" step="0.001" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="price" render={({ field }) => (
+                    <FormItem><FormLabel>السعر</FormLabel><FormControl><Input type="number" step="0.01" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
+                  )} />
+                </div>
+                {calculatedAmount > 0 && (
+                  <div className="rounded-md bg-red-50 border border-red-200 p-3 text-center">
+                    <span className="text-sm text-muted-foreground">عليه (تلقائي): </span>
+                    <span className="text-lg font-bold text-red-600">{formatCurrency(calculatedAmount)}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <FormField control={form.control} name="amount" render={({ field }) => (
+                  <FormItem><FormLabel>المبلغ</FormLabel><FormControl><Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="bank_id" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>مصدر الدفع (البنك) <span className="text-destructive">*</span></FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر البنك أو المحفظة" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {banks.map((bank) => (
+                          <SelectItem key={bank.id} value={bank.id}>
+                            {bank.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </>
             )}
 
             <div className="flex justify-end gap-2 pt-2">

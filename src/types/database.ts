@@ -20,6 +20,12 @@ export interface Customer {
   created_at: string;
 }
 
+export interface CustomerWithBalance extends Customer {
+  total_debit: number;
+  total_credit: number;
+  balance: number;
+}
+
 export interface Product {
   id: string;
   name: string;

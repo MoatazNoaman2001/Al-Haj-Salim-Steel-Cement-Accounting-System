@@ -80,7 +80,6 @@ export function EditBankDialog({ bank, onClose }: EditBankDialogProps) {
     values: bank ? { reason: "", name: bank.name, balance: String(bank.balance) } : undefined,
   });
 
-  // Fetch edit history when dialog opens
   useEffect(() => {
     if (!bank) { setHistory([]); return; }
 
@@ -91,11 +90,10 @@ export function EditBankDialog({ bank, onClose }: EditBankDialogProps) {
       .eq("entity", "bank")
       .eq("entity_id", bank.id)
       .order("created_at", { ascending: false })
-      .then(({ data }) => {
+      .then(({ data }: { data: EditHistoryItem[] | null }) => {
         setHistory(data ?? []);
         setLoadingHistory(false);
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bank?.id]);
 
   async function onSubmit(values: EditBankFormValues) {

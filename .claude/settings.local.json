@@ -20,7 +20,12 @@
       "Bash(find:*)",
       "Bash(grep:*)",
       "Bash(ls:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

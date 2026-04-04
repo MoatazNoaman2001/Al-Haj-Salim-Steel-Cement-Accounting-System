@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarIcon, Printer } from "lucide-react";
+import Link from "next/link";
+import { CalendarIcon, Download, ChevronDown, ChevronLeft } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -13,14 +14,38 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { INVENTORY_TABLE_HEADERS } from "@/lib/constants";
 import { formatCurrency, formatQuantity, formatDate } from "@/lib/utils";
 import { useRealtimeInventory } from "@/hooks/use-realtime";
+import { exportInventoryReport } from "@/lib/export-excel";
 import type { DailyInventoryWithProduct, Product } from "@/types/database";
+
+interface SaleEntry {
+  product_id: string;
+  quantity: number;
+  is_corrected: boolean;
+  customer: { id: string; name: string } | null;
+}
 
 interface InventoryClientProps {
   products: Pick<Product, "id" | "name" | "category">[];
   inventory: DailyInventoryWithProduct[];
-  sales: { product_id: string; quantity: number; is_corrected: boolean }[];
+  sales: SaleEntry[];
   initialDate: string;
   initialCategory: string;
+}
+
+// TODO: Remove mock data after testing
+const MOCK_SALES: SaleEntry[] = [
+  { product_id: "__FIRST__", quantity: 65, is_corrected: false, customer: { id: "mock-1", name: "كمباوند كنوز" } },
+  { product_id: "__FIRST__", quantity: 34, is_corrected: false, customer: { id: "mock-2", name: "احمد توفيق" } },
+  { product_id: "__SECOND__", quantity: 20, is_corrected: false, customer: { id: "mock-1", name: "كمباوند كنوز" } },
+  { product_id: "__SECOND__", quantity: 15, is_corrected: false, customer: { id: "mock-3", name: "شركة البدري" } },
+];
+
+function getMockSales(products: Pick<Product, "id" | "name" | "category">[]): SaleEntry[] {
+  if (products.length < 2) return [];
+  return MOCK_SALES.map((s) => ({
+    ...s,
+    product_id: s.product_id === "__FIRST__" ? products[0].id : products[1].id,
+  }));
 }
 
 export function InventoryClient({ products, inventory, sales, initialDate, initialCategory }: InventoryClientProps) {
@@ -29,11 +54,25 @@ export function InventoryClient({ products, inventory, sales, initialDate, initi
 
   useRealtimeInventory(initialDate);
 
-  const soldByProduct = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const sale of sales) { map[sale.product_id] = (map[sale.product_id] || 0) + sale.quantity; }
-    return map;
-  }, [sales]);
+  // TODO: Remove mock fallback after testing
+  const effectiveSales = sales.length > 0 ? sales : getMockSales(products);
+
+  const { soldByProduct, customersByProduct } = useMemo(() => {
+    const soldMap: Record<string, number> = {};
+    const custMap: Record<string, { id: string; name: string; quantity: number }[]> = {};
+    for (const sale of effectiveSales) {
+      soldMap[sale.product_id] = (soldMap[sale.product_id] || 0) + sale.quantity;
+      if (sale.customer) {
+        if (!custMap[sale.product_id]) custMap[sale.product_id] = [];
+        const existing = custMap[sale.product_id].find((c) => c.id === sale.customer!.id);
+        if (existing) { existing.quantity += sale.quantity; }
+        else { custMap[sale.product_id].push({ id: sale.customer.id, name: sale.customer.name, quantity: sale.quantity }); }
+      }
+    }
+    return { soldByProduct: soldMap, customersByProduct: custMap };
+  }, [effectiveSales]);
+
+  const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
 
   const rows = useMemo(() => {
     return products.map((product) => {
@@ -43,13 +82,32 @@ export function InventoryClient({ products, inventory, sales, initialDate, initi
       const sold = soldByProduct[product.id] ?? 0;
       const netRemaining = previousBalance + added - sold;
       const costPrice = inv?.cost_price ?? 0;
-      return { product, previousBalance, added, sold, netRemaining, costPrice, remainingCost: netRemaining * costPrice };
+      const customers = customersByProduct[product.id] ?? [];
+      return { product, previousBalance, added, sold, netRemaining, costPrice, remainingCost: netRemaining * costPrice, customers };
     });
-  }, [products, inventory, soldByProduct]);
+  }, [products, inventory, soldByProduct, customersByProduct]);
 
   const totalRemainingCost = rows.reduce((sum, r) => sum + r.remainingCost, 0);
 
   const selectedDate = new Date(initialDate + "T00:00:00");
+
+  function handleExport() {
+    exportInventoryReport(
+      initialDate,
+      initialCategory,
+      rows.map((r) => ({
+        productName: r.product.name,
+        previousBalance: r.previousBalance,
+        added: r.added,
+        sold: r.sold,
+        netRemaining: r.netRemaining,
+        costPrice: r.costPrice,
+        remainingCost: r.remainingCost,
+        customers: r.customers,
+      })),
+      totalRemainingCost
+    );
+  }
 
   return (
     <div>
@@ -71,8 +129,8 @@ export function InventoryClient({ products, inventory, sales, initialDate, initi
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
-          <Printer className="h-4 w-4" />طباعة
+        <Button variant="outline" size="sm" className="gap-2" onClick={handleExport}>
+          <Download className="h-4 w-4" />تصدير Excel
         </Button>
       </div>
 
@@ -90,17 +148,44 @@ export function InventoryClient({ products, inventory, sales, initialDate, initi
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.length ? rows.map((row) => (
-              <TableRow key={row.product.id}>
-                <TableCell className="font-medium">{row.product.name}</TableCell>
-                <TableCell>{formatQuantity(row.previousBalance)}</TableCell>
-                <TableCell className="text-green-600">{formatQuantity(row.added)}</TableCell>
-                <TableCell className="text-red-600">{formatQuantity(row.sold)}</TableCell>
-                <TableCell className="font-bold">{formatQuantity(row.netRemaining)}</TableCell>
-                <TableCell>{formatCurrency(row.costPrice)}</TableCell>
-                <TableCell className="font-bold">{formatCurrency(row.remainingCost)}</TableCell>
-              </TableRow>
-            )) : (
+            {rows.length ? rows.map((row) => {
+              const isExpanded = expandedProduct === row.product.id;
+              const hasCust = row.customers.length > 0;
+              return (
+                <Fragment key={row.product.id}>
+                  <TableRow
+                    className={hasCust ? "cursor-pointer hover:bg-muted/50" : ""}
+                    onClick={() => hasCust && setExpandedProduct(isExpanded ? null : row.product.id)}
+                  >
+                    <TableCell className="font-medium">
+                      <span className="flex items-center gap-1">
+                        {hasCust && (isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />)}
+                        {row.product.name}
+                      </span>
+                    </TableCell>
+                    <TableCell>{formatQuantity(row.previousBalance)}</TableCell>
+                    <TableCell className="text-green-600">{formatQuantity(row.added)}</TableCell>
+                    <TableCell className="text-red-600">{formatQuantity(row.sold)}</TableCell>
+                    <TableCell className="font-bold">{formatQuantity(row.netRemaining)}</TableCell>
+                    <TableCell>{formatCurrency(row.costPrice)}</TableCell>
+                    <TableCell className="font-bold">{formatCurrency(row.remainingCost)}</TableCell>
+                  </TableRow>
+                  {isExpanded && row.customers.map((cust) => (
+                    <TableRow key={`${row.product.id}-${cust.id}`} className="bg-muted/30">
+                      <TableCell className="ps-10 text-sm text-muted-foreground">
+                        <Link href={`/customers/${cust.id}`} className="hover:underline text-primary">
+                          ↳ {cust.name}
+                        </Link>
+                      </TableCell>
+                      <TableCell />
+                      <TableCell />
+                      <TableCell className="text-sm text-red-600">{formatQuantity(cust.quantity)}</TableCell>
+                      <TableCell colSpan={3} />
+                    </TableRow>
+                  ))}
+                </Fragment>
+              );
+            }) : (
               <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground">لا توجد بيانات جرد</TableCell></TableRow>
             )}
           </TableBody>

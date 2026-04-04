@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronsUpDown, Plus, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronsUpDown, Plus, Loader2, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,19 +70,20 @@ export function CustomerCombobox({
 
   return (
     <>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            className="w-full justify-between"
-            disabled={disabled}
-          >
-            {selectedCustomer?.name ?? "اختر العميل..."}
-            <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
+      <div className="flex items-center gap-2">
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              className="w-full justify-between"
+              disabled={disabled}
+            >
+              {selectedCustomer?.name ?? "اختر العميل..."}
+              <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
         <PopoverContent className="w-full p-0" align="start">
           <Command>
             <CommandInput placeholder="ابحث عن عميل..." />
@@ -122,7 +124,15 @@ export function CustomerCombobox({
             </CommandList>
           </Command>
         </PopoverContent>
-      </Popover>
+        </Popover>
+        {value && (
+          <Link href={`/customers/${value}`} target="_blank">
+            <Button variant="outline" size="icon" type="button" title="كشف حساب العميل">
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </Link>
+        )}
+      </div>
 
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="max-w-sm">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Printer, ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { Plus, ArrowRight, Pencil, Trash2, Download } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -22,6 +22,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { exportCustomerReport } from "@/lib/export-excel";
 import type { Customer, CustomerTransactionWithCreator, Bank } from "@/types/database";
 
 interface CustomerDetailClientProps {
@@ -90,8 +91,13 @@ export function CustomerDetailClient({ customer, transactions, banks }: Customer
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
-            <Printer className="h-4 w-4" />طباعة
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => exportCustomerReport(customer.name, rows, totalDebit, totalCredit, finalBalance)}
+          >
+            <Download className="h-4 w-4" />تصدير Excel
           </Button>
           <Button size="sm" className="gap-2" onClick={() => setAddDialogOpen(true)}>
             <Plus className="h-4 w-4" />إضافة قيد
@@ -128,8 +134,8 @@ export function CustomerDetailClient({ customer, transactions, banks }: Customer
               <TableHead className="text-start">{CUSTOMER_TX_HEADERS.description}</TableHead>
               <TableHead className="text-start">{CUSTOMER_TX_HEADERS.quantity}</TableHead>
               <TableHead className="text-start">{CUSTOMER_TX_HEADERS.price}</TableHead>
-              <TableHead className="text-start">{CUSTOMER_TX_HEADERS.debit}</TableHead>
-              <TableHead className="text-start">{CUSTOMER_TX_HEADERS.credit}</TableHead>
+              <TableHead className="text-start">{`عليه (${customer.name})`}</TableHead>
+              <TableHead className="text-start">{`له (${customer.name})`}</TableHead>
               <TableHead className="text-start">{CUSTOMER_TX_HEADERS.balance}</TableHead>
               <TableHead className="text-start">{CUSTOMER_TX_HEADERS.source}</TableHead>
               {isAdmin && <TableHead className="text-start w-[100px]">إجراءات</TableHead>}

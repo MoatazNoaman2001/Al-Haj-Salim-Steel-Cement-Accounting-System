@@ -6,7 +6,7 @@ export default async function CustomersPage() {
   const supabase = await createClient();
 
   const { data: customers } = await supabase
-    .from("customers")
+    .from("customer_balances")
     .select("*")
     .order("name", { ascending: true });
 

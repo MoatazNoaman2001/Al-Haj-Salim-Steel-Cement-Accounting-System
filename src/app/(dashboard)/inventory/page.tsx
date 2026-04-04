@@ -20,10 +20,15 @@ export default async function InventoryPage({ searchParams }: PageProps) {
     .from("daily_inventory").select(`*, product:products!product_id(id, name)`).eq("entry_date", date);
 
   const { data: sales } = await supabase
-    .from("daily_cement").select("product_id, quantity, is_corrected").eq("entry_date", date).eq("is_corrected", false);
+    .from("daily_cement").select("product_id, quantity, is_corrected, customer:customers!customer_id(id, name)").eq("entry_date", date).eq("is_corrected", false);
 
   const productIds = new Set((products ?? []).map((p) => p.id));
-  const filteredSales = (sales ?? []).filter((s) => productIds.has(s.product_id));
+  const filteredSales = (sales ?? [])
+    .filter((s) => productIds.has(s.product_id))
+    .map((s) => ({
+      ...s,
+      customer: Array.isArray(s.customer) ? s.customer[0] ?? null : s.customer,
+    }));
 
   return (
     <div className="flex flex-col h-full">

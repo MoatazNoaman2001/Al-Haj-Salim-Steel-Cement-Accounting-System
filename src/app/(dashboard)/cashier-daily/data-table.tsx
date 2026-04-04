@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Printer, CalendarIcon } from "lucide-react";
+import { Plus, Download, CalendarIcon } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -24,6 +24,7 @@ import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
 import { useRealtimeCashier } from "@/hooks/use-realtime";
 import { AddCashierEntryDialog } from "./add-entry-dialog";
+import { exportCashierReport } from "@/lib/export-excel";
 import type { DailyCashierWithCreator } from "@/types/database";
 
 interface CashierDataTableProps {
@@ -96,10 +97,10 @@ export function CashierDataTable({
             variant="outline"
             size="sm"
             className="gap-2"
-            onClick={() => window.print()}
+            onClick={() => exportCashierReport(initialDate, rows, totalDebit, totalCredit)}
           >
-            <Printer className="h-4 w-4" />
-            طباعة
+            <Download className="h-4 w-4" />
+            تصدير Excel
           </Button>
           <Button
             size="sm"

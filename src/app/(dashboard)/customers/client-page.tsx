@@ -17,10 +17,11 @@ import { Badge } from "@/components/ui/badge";
 import { useRealtimeCustomers } from "@/hooks/use-realtime";
 import { AddCustomerDialog } from "./add-customer-dialog";
 import { useUser } from "@/hooks/use-user";
-import type { Customer } from "@/types/database";
+import { formatCurrency } from "@/lib/utils";
+import type { CustomerWithBalance } from "@/types/database";
 
 interface CustomersClientProps {
-  customers: Customer[];
+  customers: CustomerWithBalance[];
 }
 
 export function CustomersClient({ customers }: CustomersClientProps) {
@@ -71,8 +72,9 @@ export function CustomersClient({ customers }: CustomersClientProps) {
               <TableHead className="text-start w-[50px]">م</TableHead>
               <TableHead className="text-start">اسم العميل</TableHead>
               <TableHead className="text-start">الهاتف</TableHead>
-              <TableHead className="text-start">العنوان</TableHead>
-              <TableHead className="text-start">ملاحظات</TableHead>
+              <TableHead className="text-start">عليه</TableHead>
+              <TableHead className="text-start">له</TableHead>
+              <TableHead className="text-start">الرصيد</TableHead>
               <TableHead className="text-start">الحالة</TableHead>
               <TableHead className="text-start w-[80px]">إجراءات</TableHead>
             </TableRow>
@@ -84,8 +86,16 @@ export function CustomersClient({ customers }: CustomersClientProps) {
                   <TableCell>{index + 1}</TableCell>
                   <TableCell className="font-medium">{customer.name}</TableCell>
                   <TableCell dir="ltr" className="text-start">{customer.phone ?? "—"}</TableCell>
-                  <TableCell>{customer.address ?? "—"}</TableCell>
-                  <TableCell>{customer.notes ?? "—"}</TableCell>
+                  <TableCell className="text-red-600 font-medium">
+                    {formatCurrency(customer.total_debit)}
+                  </TableCell>
+                  <TableCell className="text-green-600 font-medium">
+                    {formatCurrency(customer.total_credit)}
+                  </TableCell>
+                  <TableCell className={`font-bold ${customer.balance > 0 ? "text-red-600" : customer.balance < 0 ? "text-green-600" : ""}`}>
+                    {formatCurrency(Math.abs(customer.balance))}
+                    {customer.balance > 0 ? " مدين" : customer.balance < 0 ? " دائن" : ""}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={customer.is_active ? "default" : "secondary"}>
                       {customer.is_active ? "نشط" : "غير نشط"}
@@ -103,7 +113,7 @@ export function CustomersClient({ customers }: CustomersClientProps) {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                   لا يوجد عملاء
                 </TableCell>
               </TableRow>
