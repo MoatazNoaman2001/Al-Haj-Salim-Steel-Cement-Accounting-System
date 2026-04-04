@@ -3,23 +3,17 @@
 import { useMemo } from "react";
 import { Banknote, ArrowDownToLine, Wallet } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import type {
-  DailyCementWithRelations,
-  DailyDepositWithCreator,
-  DailyCashBalance,
-} from "@/types/database";
+import { useCementEntries, useDailyDeposits, useDailyCashBalance } from "@/hooks/use-cement-daily-queries";
 
 interface CashBalanceSummaryProps {
-  entries: DailyCementWithRelations[];
-  deposits: DailyDepositWithCreator[];
-  cashBalance: DailyCashBalance | null;
+  date: string;
 }
 
-export function CashBalanceSummary({
-  entries,
-  deposits,
-  cashBalance,
-}: CashBalanceSummaryProps) {
+export function CashBalanceSummary({ date }: CashBalanceSummaryProps) {
+  const { data: entries = [] } = useCementEntries(date);
+  const { data: deposits = [] } = useDailyDeposits(date);
+  const { data: cashBalance = null } = useDailyCashBalance(date);
+
   const summary = useMemo(() => {
     const activeEntries = entries.filter((e) => !e.is_corrected);
     const totalSales = activeEntries.reduce(

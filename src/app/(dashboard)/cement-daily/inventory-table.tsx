@@ -2,9 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { Save } from "lucide-react";
-import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 import {
   Table,
   TableBody,
@@ -16,36 +13,26 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { INVENTORY_TABLE_HEADERS, MESSAGES } from "@/lib/constants";
+import { INVENTORY_TABLE_HEADERS } from "@/lib/constants";
 import { formatCurrency, formatQuantity } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
-import { useRealtimeInventory } from "@/hooks/use-realtime";
-import type {
-  DailyInventoryWithProduct,
-  DailyCementWithRelations,
-  Product,
-} from "@/types/database";
+import { useDailyInventory, useCementProducts, useCementEntries } from "@/hooks/use-cement-daily-queries";
+import { useUpsertInventory } from "@/hooks/use-cement-daily-mutations";
+import { useRealtimeInventoryRQ } from "@/hooks/use-cement-daily-realtime";
 
 interface InventoryTableProps {
-  inventory: DailyInventoryWithProduct[];
-  products: Pick<Product, "id" | "name">[];
-  entries: DailyCementWithRelations[];
   date: string;
 }
 
-export function InventoryTable({
-  inventory,
-  products,
-  entries,
-  date,
-}: InventoryTableProps) {
+export function InventoryTable({ date }: InventoryTableProps) {
   const { isAdmin, userId } = useUser();
-  const supabase = createClient();
-  const router = useRouter();
+  const { data: inventory = [] } = useDailyInventory(date);
+  const { data: products = [] } = useCementProducts();
+  const { data: entries = [] } = useCementEntries(date);
+  const upsertInventory = useUpsertInventory(date);
 
-  useRealtimeInventory(date);
+  useRealtimeInventoryRQ(date);
 
-  // Compute sold per product from daily_cement entries
   const soldByProduct = useMemo(() => {
     const map: Record<string, number> = {};
     for (const entry of entries) {
@@ -57,7 +44,6 @@ export function InventoryTable({
     return map;
   }, [entries]);
 
-  // Build rows: one per product
   const rows = useMemo(() => {
     return products.map((product) => {
       const inv = inventory.find((i) => i.product_id === product.id);
@@ -81,14 +67,12 @@ export function InventoryTable({
     });
   }, [products, inventory, soldByProduct]);
 
-  // State for editable fields
   const [editedValues, setEditedValues] = useState<
     Record<
       string,
       { added?: string; cost_price?: string; previous_balance?: string }
     >
   >({});
-  const [saving, setSaving] = useState<Record<string, boolean>>({});
 
   function handleFieldChange(
     productId: string,
@@ -101,14 +85,12 @@ export function InventoryTable({
     }));
   }
 
-  async function handleSave(productId: string) {
+  function handleSave(productId: string) {
     const edited = editedValues[productId];
     if (!edited) return;
 
     const row = rows.find((r) => r.product.id === productId);
     if (!row) return;
-
-    setSaving((prev) => ({ ...prev, [productId]: true }));
 
     const upsertData = {
       entry_date: date,
@@ -125,35 +107,20 @@ export function InventoryTable({
       created_by: userId,
     };
 
-    const { error } = row.inventory_id
-      ? await supabase
-          .from("daily_inventory")
-          .update({
-            previous_balance: upsertData.previous_balance,
-            added: upsertData.added,
-            cost_price: upsertData.cost_price,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", row.inventory_id)
-      : await supabase.from("daily_inventory").insert(upsertData);
-
-    setSaving((prev) => ({ ...prev, [productId]: false }));
-
-    if (error) {
-      toast.error(MESSAGES.error);
-      return;
-    }
-
-    toast.success(MESSAGES.inventoryUpdated);
-    setEditedValues((prev) => {
-      const next = { ...prev };
-      delete next[productId];
-      return next;
-    });
-    router.refresh();
+    upsertInventory.mutate(
+      { inventoryId: row.inventory_id, upsertData },
+      {
+        onSuccess: () => {
+          setEditedValues((prev) => {
+            const next = { ...prev };
+            delete next[productId];
+            return next;
+          });
+        },
+      }
+    );
   }
 
-  // Totals
   const totals = useMemo(
     () => ({
       previous_balance: rows.reduce((sum, r) => sum + r.previous_balance, 0),
@@ -302,7 +269,7 @@ export function InventoryTable({
                       <Button
                         size="sm"
                         variant="ghost"
-                        disabled={saving[row.product.id]}
+                        disabled={upsertInventory.isPending}
                         onClick={() => handleSave(row.product.id)}
                       >
                         <Save className="h-4 w-4" />

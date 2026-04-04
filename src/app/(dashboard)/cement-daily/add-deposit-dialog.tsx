@@ -2,9 +2,6 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
-import { MESSAGES } from "@/lib/constants";
 import {
   addDepositSchema,
   type AddDepositFormValues,
@@ -26,7 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
+import { useAddDeposit } from "@/hooks/use-cement-daily-mutations";
 
 interface AddDepositDialogProps {
   open: boolean;
@@ -41,8 +38,7 @@ export function AddDepositDialog({
   date,
   userId,
 }: AddDepositDialogProps) {
-  const supabase = createClient();
-  const router = useRouter();
+  const addDeposit = useAddDeposit(date);
 
   const form = useForm<AddDepositFormValues>({
     resolver: zodResolver(addDepositSchema),
@@ -54,22 +50,20 @@ export function AddDepositDialog({
   });
 
   async function onSubmit(values: AddDepositFormValues) {
-    const { error } = await supabase.from("daily_deposits").insert({
-      entry_date: values.entry_date,
-      amount: Number(values.amount),
-      description: values.description || null,
-      created_by: userId,
-    });
-
-    if (error) {
-      toast.error(MESSAGES.error);
-      return;
-    }
-
-    toast.success(MESSAGES.depositAdded);
-    form.reset({ entry_date: date, amount: "0", description: "" });
-    onOpenChange(false);
-    router.refresh();
+    addDeposit.mutate(
+      {
+        entry_date: values.entry_date,
+        amount: Number(values.amount),
+        description: values.description || null,
+        created_by: userId,
+      },
+      {
+        onSuccess: () => {
+          form.reset({ entry_date: date, amount: "0", description: "" });
+          onOpenChange(false);
+        },
+      }
+    );
   }
 
   return (
@@ -137,8 +131,8 @@ export function AddDepositDialog({
               >
                 إلغاء
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "جاري الحفظ..." : "حفظ"}
+              <Button type="submit" disabled={addDeposit.isPending}>
+                {addDeposit.isPending ? "جاري الحفظ..." : "حفظ"}
               </Button>
             </div>
           </form>

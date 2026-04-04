@@ -3,9 +3,6 @@
 import { useState } from "react";
 import { Check, ChevronsUpDown, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
-import { MESSAGES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -29,13 +26,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { Customer } from "@/types/database";
+import { useAddCustomer } from "@/hooks/use-cement-daily-mutations";
 
 interface CustomerComboboxProps {
   customers: Pick<Customer, "id" | "name">[];
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
-  onCustomerAdded?: (customer: Pick<Customer, "id" | "name">) => void;
 }
 
 export function CustomerCombobox({
@@ -43,47 +40,31 @@ export function CustomerCombobox({
   value,
   onChange,
   disabled,
-  onCustomerAdded,
 }: CustomerComboboxProps) {
   const [open, setOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
-  const [isAdding, setIsAdding] = useState(false);
   const selectedCustomer = customers.find((c) => c.id === value);
+  const addCustomer = useAddCustomer();
 
-  async function handleAddCustomer() {
+  function handleAddCustomer() {
     if (!newName.trim()) {
-      toast.error("اسم العميل مطلوب");
       return;
     }
 
-    setIsAdding(true);
-    const supabase = createClient();
-
-    const { data, error } = await supabase
-      .from("customers")
-      .insert({
-        name: newName.trim(),
-        phone: newPhone.trim() || null,
-      })
-      .select("id, name")
-      .single();
-
-    setIsAdding(false);
-
-    if (error) {
-      toast.error(MESSAGES.error);
-      return;
-    }
-
-    toast.success(MESSAGES.customerAdded);
-    onCustomerAdded?.(data);
-    onChange(data.id);
-    setNewName("");
-    setNewPhone("");
-    setAddDialogOpen(false);
-    setOpen(false);
+    addCustomer.mutate(
+      { name: newName.trim(), phone: newPhone.trim() || null },
+      {
+        onSuccess: (customer) => {
+          onChange(customer.id);
+          setNewName("");
+          setNewPhone("");
+          setAddDialogOpen(false);
+          setOpen(false);
+        },
+      }
+    );
   }
 
   return (
@@ -174,8 +155,8 @@ export function CustomerCombobox({
               >
                 إلغاء
               </Button>
-              <Button onClick={handleAddCustomer} disabled={isAdding}>
-                {isAdding ? (
+              <Button onClick={handleAddCustomer} disabled={addCustomer.isPending}>
+                {addCustomer.isPending ? (
                   <>
                     <Loader2 className="me-2 h-4 w-4 animate-spin" />
                     جاري الإضافة...

@@ -2,9 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 import {
   Table,
   TableBody,
@@ -15,43 +12,30 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { DEPOSIT_TABLE_HEADERS, MESSAGES } from "@/lib/constants";
+import { DEPOSIT_TABLE_HEADERS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
-import { useRealtimeDeposits } from "@/hooks/use-realtime";
+import { useDailyDeposits } from "@/hooks/use-cement-daily-queries";
+import { useDeleteDeposit } from "@/hooks/use-cement-daily-mutations";
+import { useRealtimeDepositsRQ } from "@/hooks/use-cement-daily-realtime";
 import { AddDepositDialog } from "./add-deposit-dialog";
-import type { DailyDepositWithCreator } from "@/types/database";
 
 interface DepositsTableProps {
-  data: DailyDepositWithCreator[];
   date: string;
 }
 
-export function DepositsTable({ data, date }: DepositsTableProps) {
+export function DepositsTable({ date }: DepositsTableProps) {
   const { isAdmin, userId } = useUser();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const supabase = createClient();
-  const router = useRouter();
+  const { data = [] } = useDailyDeposits(date);
+  const deleteDeposit = useDeleteDeposit(date);
 
-  useRealtimeDeposits(date);
+  useRealtimeDepositsRQ(date);
 
   const totalDeposits = useMemo(
     () => data.reduce((sum, d) => sum + (d.amount ?? 0), 0),
     [data]
   );
-
-  async function handleDelete(id: string) {
-    const { error } = await supabase
-      .from("daily_deposits")
-      .delete()
-      .eq("id", id);
-    if (error) {
-      toast.error(MESSAGES.error);
-      return;
-    }
-    toast.success(MESSAGES.depositDeleted);
-    router.refresh();
-  }
 
   return (
     <div className="mt-8">
@@ -106,7 +90,7 @@ export function DepositsTable({ data, date }: DepositsTableProps) {
                         variant="ghost"
                         size="sm"
                         className="text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(deposit.id)}
+                        onClick={() => deleteDeposit.mutate(deposit.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

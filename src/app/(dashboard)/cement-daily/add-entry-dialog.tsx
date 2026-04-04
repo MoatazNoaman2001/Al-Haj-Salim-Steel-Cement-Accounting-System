@@ -2,9 +2,6 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
-import { MESSAGES } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import {
   addEntrySchema,
@@ -29,32 +26,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { CustomerCombobox } from "@/components/shared/customer-combobox";
 import { ProductSelect } from "@/components/shared/product-select";
-import type { Customer, Product } from "@/types/database";
-import { useRouter } from "next/navigation";
+import { useCustomers, useCementProducts } from "@/hooks/use-cement-daily-queries";
+import { useAddCementEntry } from "@/hooks/use-cement-daily-mutations";
 
 interface AddEntryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  customers: Pick<Customer, "id" | "name">[];
-  products: Pick<Product, "id" | "name">[];
   date: string;
   userId: string;
   isAdmin: boolean;
-  onCustomerAdded?: (customer: Pick<Customer, "id" | "name">) => void;
 }
 
 export function AddEntryDialog({
   open,
   onOpenChange,
-  customers,
-  products,
   date,
   userId,
   isAdmin,
-  onCustomerAdded,
 }: AddEntryDialogProps) {
-  const supabase = createClient();
-  const router = useRouter();
+  const { data: customers = [] } = useCustomers();
+  const { data: products = [] } = useCementProducts();
+  const addEntry = useAddCementEntry(date);
 
   const form = useForm<AddEntryFormValues>({
     resolver: zodResolver(addEntrySchema),
@@ -98,28 +90,23 @@ export function AddEntryDialog({
       insertData.cost_per_ton = Number(values.cost_per_ton);
     }
 
-    const { error } = await supabase.from("daily_cement").insert(insertData);
-
-    if (error) {
-      toast.error(MESSAGES.error);
-      return;
-    }
-
-    toast.success(MESSAGES.entryAdded);
-    form.reset({
-      entry_date: date,
-      customer_id: "",
-      product_id: "",
-      quantity: "0",
-      price_per_ton: "0",
-      amount_paid: "0",
-      transport_cost: "0",
-      driver_name: "",
-      cost_per_ton: "",
-      notes: "",
+    addEntry.mutate(insertData, {
+      onSuccess: () => {
+        form.reset({
+          entry_date: date,
+          customer_id: "",
+          product_id: "",
+          quantity: "0",
+          price_per_ton: "0",
+          amount_paid: "0",
+          transport_cost: "0",
+          driver_name: "",
+          cost_per_ton: "",
+          notes: "",
+        });
+        onOpenChange(false);
+      },
     });
-    onOpenChange(false);
-    router.refresh();
   }
 
   return (
@@ -155,7 +142,6 @@ export function AddEntryDialog({
                         customers={customers}
                         value={field.value}
                         onChange={field.onChange}
-                        onCustomerAdded={onCustomerAdded}
                       />
                     </FormControl>
                     <FormMessage />
@@ -343,8 +329,8 @@ export function AddEntryDialog({
               >
                 إلغاء
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "جاري الحفظ..." : "حفظ"}
+              <Button type="submit" disabled={addEntry.isPending}>
+                {addEntry.isPending ? "جاري الحفظ..." : "حفظ"}
               </Button>
             </div>
           </form>

@@ -2,11 +2,9 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { MESSAGES } from "@/lib/constants";
 import { useUser } from "@/hooks/use-user";
+import { useCustomers, useCementProducts } from "@/hooks/use-cement-daily-queries";
+import { useRequestCorrection } from "@/hooks/use-cement-daily-mutations";
 import {
   correctionRequestSchema,
   type CorrectionRequestFormValues,
@@ -30,24 +28,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { CustomerCombobox } from "@/components/shared/customer-combobox";
 import { ProductSelect } from "@/components/shared/product-select";
-import type { Customer, Product, DailyCementWithRelations } from "@/types/database";
+import type { DailyCementWithRelations } from "@/types/database";
+import { toast } from "sonner";
 
 interface CorrectionRequestDialogProps {
   entry: DailyCementWithRelations | null;
   onClose: () => void;
-  customers: Pick<Customer, "id" | "name">[];
-  products: Pick<Product, "id" | "name">[];
 }
 
 export function CorrectionRequestDialog({
   entry,
   onClose,
-  customers,
-  products,
 }: CorrectionRequestDialogProps) {
-  const supabase = createClient();
-  const router = useRouter();
   const { userId } = useUser();
+  const { data: customers = [] } = useCustomers();
+  const { data: products = [] } = useCementProducts();
+  const requestCorrection = useRequestCorrection();
 
   const form = useForm<CorrectionRequestFormValues>({
     resolver: zodResolver(correctionRequestSchema),
@@ -94,21 +90,19 @@ export function CorrectionRequestDialog({
       return;
     }
 
-    const { error } = await supabase.from("correction_requests").insert({
-      entry_id: entry.id,
-      proposed_changes: proposedChanges,
-      reason,
-      requested_by: userId,
-    });
-
-    if (error) {
-      toast.error(MESSAGES.error);
-      return;
-    }
-
-    toast.success(MESSAGES.correctionRequested);
-    onClose();
-    router.refresh();
+    requestCorrection.mutate(
+      {
+        entry_id: entry.id,
+        proposed_changes: proposedChanges,
+        reason,
+        requested_by: userId,
+      },
+      {
+        onSuccess: () => {
+          onClose();
+        },
+      }
+    );
   }
 
   return (
@@ -254,8 +248,8 @@ export function CorrectionRequestDialog({
                 <Button type="button" variant="outline" onClick={onClose}>
                   إلغاء
                 </Button>
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting
+                <Button type="submit" disabled={requestCorrection.isPending}>
+                  {requestCorrection.isPending
                     ? "جاري الإرسال..."
                     : "إرسال طلب التصحيح"}
                 </Button>
