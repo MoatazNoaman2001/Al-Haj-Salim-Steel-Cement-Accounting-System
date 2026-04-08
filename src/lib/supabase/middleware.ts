@@ -29,31 +29,46 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith("sb-"));
+
+  let user = null;
+  let authError = false;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    user = data.user;
+    if (error) authError = true;
+  } catch {
+    authError = true;
+  }
 
   const isLoginPage = request.nextUrl.pathname === "/login";
   const isPublicPath = isLoginPage || request.nextUrl.pathname === "/";
 
   if (!user && !isPublicPath) {
+    // If auth failed but user has auth cookies → offline, let them through
+    if (authError && hasAuthCookie) {
+      return supabaseResponse;
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
   if (user && isLoginPage) {
-    // Verify user has a profile before redirecting to dashboard
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", user.id)
-      .single();
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .single();
 
-    if (profile) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      return NextResponse.redirect(url);
+      if (profile) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/dashboard";
+        return NextResponse.redirect(url);
+      }
+    } catch {
+      // Offline — let login page through
     }
   }
 
