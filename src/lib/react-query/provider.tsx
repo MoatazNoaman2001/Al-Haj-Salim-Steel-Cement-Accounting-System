@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { createIDBPersister } from "./persister";
+
+const persister = createIDBPersister();
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -10,6 +14,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 30 * 1000,
+            gcTime: 1000 * 60 * 60 * 24, // 24 hours — keep cache for offline use
             refetchOnWindowFocus: false,
           },
         },
@@ -17,6 +22,14 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister,
+        maxAge: 1000 * 60 * 60 * 24, // 24 hours
+      }}
+    >
+      {children}
+    </PersistQueryClientProvider>
   );
 }
