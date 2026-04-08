@@ -5,7 +5,6 @@ import { Plus, ArrowRight, Pencil, Trash2, Download } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import {
   Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -15,7 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { CUSTOMER_TX_HEADERS, MESSAGES } from "@/lib/constants";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
-import { useRealtimeCustomerTransactions } from "@/hooks/use-realtime";
+import { useOfflineQuery } from "@/hooks/use-offline-query";
+import { safeUpdate } from "@/lib/supabase/safe-fetch";
 import { AddCustomerTransactionDialog } from "./add-transaction-dialog";
 import { CustomerCorrectionDialog } from "./correction-dialog";
 import {
@@ -26,32 +26,54 @@ import { exportCustomerReport } from "@/lib/export-excel";
 import type { Customer, CustomerTransactionWithCreator, Bank } from "@/types/database";
 
 interface CustomerDetailClientProps {
-  customer: Customer;
+  customerId: string;
+  customer: Customer | null;
   transactions: CustomerTransactionWithCreator[];
   banks: Bank[];
 }
 
-export function CustomerDetailClient({ customer, transactions, banks }: CustomerDetailClientProps) {
+export function CustomerDetailClient({ customerId, customer: serverCustomer, transactions, banks }: CustomerDetailClientProps) {
   const { userId, isAdmin } = useUser();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [correctionEntry, setCorrectionEntry] = useState<CustomerTransactionWithCreator | null>(null);
   const [deleteEntry, setDeleteEntry] = useState<CustomerTransactionWithCreator | null>(null);
   const [deleting, setDeleting] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
+  const { data: customer } = useOfflineQuery<Customer | null>({
+    key: `customer:${customerId}`,
+    queryFn: (sb) => sb.from("customers").select("*").eq("id", customerId).single(),
+    fallback: serverCustomer,
+  });
 
-  useRealtimeCustomerTransactions(customer.id);
+  const { data: txData } = useOfflineQuery<CustomerTransactionWithCreator[]>({
+    key: `customer-tx:${customerId}`,
+    queryFn: (sb) => sb.from("customer_transactions").select("*, creator:profiles!created_by(id, full_name)").eq("customer_id", customerId).order("entry_date", { ascending: true }).order("row_number", { ascending: true }),
+    fallback: transactions,
+    realtimeTable: "customer_transactions",
+    realtimeFilter: `customer_id=eq.${customerId}`,
+  });
+
+  const { data: bankData } = useOfflineQuery<Bank[]>({
+    key: "banks-active",
+    queryFn: (sb) => sb.from("banks").select("*").eq("is_active", true).order("created_at", { ascending: true }),
+    fallback: banks,
+    realtimeTable: "banks",
+  });
+
+  if (!customer) {
+    return <div className="flex items-center justify-center h-48 text-muted-foreground">جاري التحميل من الذاكرة المحلية...</div>;
+  }
 
   // Build bank name lookup
   const bankNameMap = useMemo(() => {
     const map: Record<string, string> = {};
-    banks.forEach((b) => { map[b.id] = b.name; });
+    bankData.forEach((b) => { map[b.id] = b.name; });
     return map;
-  }, [banks]);
+  }, [bankData]);
 
   const { rows, totalDebit, totalCredit, finalBalance } = useMemo(() => {
     let runningBalance = 0;
-    const activeEntries = transactions.filter((e) => !e.is_corrected);
+    const activeEntries = txData.filter((e) => !e.is_corrected);
     const computedRows = activeEntries.map((entry) => {
       runningBalance += entry.debit - entry.credit;
       return { ...entry, runningBalance };
@@ -59,16 +81,13 @@ export function CustomerDetailClient({ customer, transactions, banks }: Customer
     const totalDebit = activeEntries.reduce((sum, e) => sum + e.debit, 0);
     const totalCredit = activeEntries.reduce((sum, e) => sum + e.credit, 0);
     return { rows: computedRows, totalDebit, totalCredit, finalBalance: totalDebit - totalCredit };
-  }, [transactions]);
+  }, [txData]);
 
   async function handleDelete() {
     if (!deleteEntry) return;
     setDeleting(true);
 
-    const { error } = await supabase
-      .from("customer_transactions")
-      .update({ is_corrected: true })
-      .eq("id", deleteEntry.id);
+    const { error } = await safeUpdate("customer_transactions", { is_corrected: true }, { id: deleteEntry.id });
 
     if (error) { toast.error(MESSAGES.error); setDeleting(false); return; }
 
@@ -210,14 +229,14 @@ export function CustomerDetailClient({ customer, transactions, banks }: Customer
         onOpenChange={setAddDialogOpen}
         customerId={customer.id}
         userId={userId}
-        banks={banks}
+        banks={bankData}
         customerName={customer.name}
       />
       <CustomerCorrectionDialog
         entry={correctionEntry}
         onClose={() => setCorrectionEntry(null)}
         userId={userId}
-        banks={banks}
+        banks={bankData}
         customerName={customer.name}
       />
 

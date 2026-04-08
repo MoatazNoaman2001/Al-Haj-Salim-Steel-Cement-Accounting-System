@@ -14,28 +14,38 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   const toDate = params.to || today;
   const supabase = await createClient();
 
-  const { data: cementSales } = await supabase
-    .from("daily_cement").select("quantity, total_amount, total_profit, product_id, is_corrected")
-    .gte("entry_date", fromDate).lte("entry_date", toDate).eq("is_corrected", false);
+  let cementSales: any[] = [];
+  let cashierEntries: any[] = [];
+  let deposits: any[] = [];
+  let banks: any[] = [];
+  let products: any[] = [];
 
-  const { data: cashierEntries } = await supabase
-    .from("daily_cashier").select("debit, credit, is_corrected")
-    .gte("entry_date", fromDate).lte("entry_date", toDate).eq("is_corrected", false);
-
-  const { data: deposits } = await supabase
-    .from("daily_deposits").select("amount").gte("entry_date", fromDate).lte("entry_date", toDate);
-
-  const { data: banks } = await supabase.from("banks").select("name, balance").eq("is_active", true);
-
-  const { data: products } = await supabase.from("products").select("id, name, category").eq("is_active", true);
+  try {
+    const [csRes, ceRes, dRes, bRes, pRes] = await Promise.all([
+      supabase.from("daily_cement").select("quantity, total_amount, total_profit, product_id, is_corrected")
+        .gte("entry_date", fromDate).lte("entry_date", toDate).eq("is_corrected", false),
+      supabase.from("daily_cashier").select("debit, credit, is_corrected")
+        .gte("entry_date", fromDate).lte("entry_date", toDate).eq("is_corrected", false),
+      supabase.from("daily_deposits").select("amount").gte("entry_date", fromDate).lte("entry_date", toDate),
+      supabase.from("banks").select("name, balance").eq("is_active", true),
+      supabase.from("products").select("id, name, category").eq("is_active", true),
+    ]);
+    cementSales = csRes.data ?? [];
+    cashierEntries = ceRes.data ?? [];
+    deposits = dRes.data ?? [];
+    banks = bRes.data ?? [];
+    products = pRes.data ?? [];
+  } catch {
+    // Offline
+  }
 
   return (
     <div className="flex flex-col h-full">
       <Header title="التقارير" />
       <div className="flex-1 overflow-auto px-6 pb-6">
         <ReportsClient
-          cementSales={cementSales ?? []} cashierEntries={cashierEntries ?? []}
-          deposits={deposits ?? []} banks={banks ?? []} products={products ?? []}
+          cementSales={cementSales} cashierEntries={cashierEntries}
+          deposits={deposits} banks={banks} products={products}
           fromDate={fromDate} toDate={toDate}
         />
       </div>

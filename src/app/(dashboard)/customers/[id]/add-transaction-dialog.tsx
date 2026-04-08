@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v4";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { safeInsert } from "@/lib/supabase/safe-fetch";
 import { MESSAGES } from "@/lib/constants";
 import { formatCurrency, todayISO } from "@/lib/utils";
 import {
@@ -22,14 +22,19 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { Bank } from "@/types/database";
 
+const CASH_SOURCES = [
+  { id: "cash_office", name: "تحصيل نقدي المكتب" },
+  { id: "cash_warehouse", name: "تحصيل نقدي المخزن" },
+];
+
 const schema = z.object({
   entry_date: z.string().min(1, "التاريخ مطلوب"),
-  type: z.enum(["debit", "credit"]),
-  description: z.string().min(1, "التفاصيل مطلوبة"),
+  type: z.enum(["debit", "credit", "manual"]),
+  description: z.string().optional(),
   quantity: z.string().optional(),
   price: z.string().optional(),
   amount: z.string().optional(),
-  bank_id: z.string().optional(),
+  payment_source: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -44,12 +49,11 @@ interface AddCustomerTransactionDialogProps {
 }
 
 export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, userId, banks, customerName }: AddCustomerTransactionDialogProps) {
-  const supabase = createClient();
   const router = useRouter();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { entry_date: todayISO(), type: "debit", description: "", quantity: "", price: "", amount: "", bank_id: "" },
+    defaultValues: { entry_date: todayISO(), type: "debit", description: "", quantity: "", price: "", amount: "", payment_source: "" },
   });
 
   const txType = form.watch("type");
@@ -57,16 +61,13 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
   const price = Number(form.watch("price")) || 0;
   const calculatedAmount = quantity * price;
 
-  // Clear bank when switching to debit
+  // Reset fields when switching type
   useEffect(() => {
-    if (txType === "debit") {
-      form.setValue("bank_id", "");
-      form.setValue("amount", "");
-    }
-    if (txType === "credit") {
-      form.setValue("quantity", "");
-      form.setValue("price", "");
-    }
+    form.setValue("quantity", "");
+    form.setValue("price", "");
+    form.setValue("amount", "");
+    form.setValue("payment_source", "");
+    form.setValue("description", "");
   }, [txType, form]);
 
   async function onSubmit(values: FormValues) {
@@ -74,36 +75,52 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
     let credit = 0;
     let qty: number | null = null;
     let prc: number | null = null;
+    let description = values.description || "";
 
     if (values.type === "debit") {
+      // Sales: qty × price → debit
       qty = Number(values.quantity) || 0;
       prc = Number(values.price) || 0;
       debit = qty * prc;
       if (debit <= 0) { toast.error("يجب إدخال كمية وسعر صحيحين"); return; }
-    } else {
+      if (!description) { toast.error("التفاصيل مطلوبة"); return; }
+    } else if (values.type === "credit") {
+      // Payment: amount + source
       credit = Number(values.amount) || 0;
       if (credit <= 0) { toast.error("يجب إدخال مبلغ الدفع"); return; }
-      if (!values.bank_id) { toast.error("يرجى اختيار مصدر الدفع (البنك)"); return; }
+      if (!values.payment_source) { toast.error("يرجى اختيار مصدر الدفع"); return; }
+      // Auto-set description from source name
+      const cashSource = CASH_SOURCES.find((s) => s.id === values.payment_source);
+      const bankSource = banks.find((b) => b.id === values.payment_source);
+      description = cashSource?.name || bankSource?.name || "";
+    } else {
+      // Manual adjustment
+      debit = Number(values.amount) || 0;
+      if (debit < 0) { debit = 0; credit = Math.abs(Number(values.amount) || 0); }
+      if (debit === 0 && credit === 0) { toast.error("يجب إدخال مبلغ التعديل"); return; }
+      if (!description) { toast.error("التفاصيل مطلوبة"); return; }
     }
 
-    const { error } = await supabase.from("customer_transactions").insert({
+    const isBankSource = values.payment_source && !CASH_SOURCES.some((s) => s.id === values.payment_source);
+
+    const { error } = await safeInsert("customer_transactions", {
       customer_id: customerId,
       entry_date: values.entry_date,
-      description: values.description,
+      description,
       quantity: qty,
       price: prc,
       debit, credit,
-      source_type: values.bank_id ? "bank" : "manual",
-      source_id: values.bank_id || null,
+      source_type: isBankSource ? "bank" : values.type === "credit" ? "cash" : "manual",
+      source_id: isBankSource ? values.payment_source! : null,
       created_by: userId,
     });
 
     if (error) { toast.error(MESSAGES.error); return; }
 
     // If payment via bank, also create bank transaction
-    if (credit > 0 && values.bank_id) {
-      const { error: bankError } = await supabase.from("bank_transactions").insert({
-        bank_id: values.bank_id,
+    if (credit > 0 && isBankSource) {
+      const { error: bankError } = await safeInsert("bank_transactions", {
+        bank_id: values.payment_source!,
         entry_date: values.entry_date,
         description: customerName,
         debit: credit,
@@ -118,7 +135,7 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
     }
 
     toast.success(MESSAGES.customerTransactionAdded);
-    form.reset({ entry_date: todayISO(), type: "debit", description: "", quantity: "", price: "", amount: "", bank_id: "" });
+    form.reset({ entry_date: todayISO(), type: "debit", description: "", quantity: "", price: "", amount: "", payment_source: "" });
     onOpenChange(false);
     router.refresh();
   }
@@ -138,25 +155,24 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
                 <FormLabel>نوع القيد</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="debit">عليه (مبيعات)</SelectItem>
                     <SelectItem value="credit">له (دفع / تحصيل)</SelectItem>
+                    <SelectItem value="manual">تعديل يدوي (خصم / تعديل)</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="description" render={({ field }) => (
-              <FormItem><FormLabel>التفاصيل</FormLabel><FormControl><Input {...field} placeholder={txType === "debit" ? "مثال: عادة مصريين" : "مثال: بنك ابوظبي"} /></FormControl><FormMessage /></FormItem>
-            )} />
-
-            {txType === "debit" ? (
+            {/* === DEBIT (Sales) === */}
+            {txType === "debit" && (
               <>
+                <FormField control={form.control} name="description" render={({ field }) => (
+                  <FormItem><FormLabel>التفاصيل</FormLabel><FormControl><Input {...field} placeholder="مثال: عادة مصريين" /></FormControl><FormMessage /></FormItem>
+                )} />
                 <div className="grid grid-cols-2 gap-4">
                   <FormField control={form.control} name="quantity" render={({ field }) => (
                     <FormItem><FormLabel>العدد / الكمية</FormLabel><FormControl><Input type="number" step="0.001" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
@@ -172,30 +188,49 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
                   </div>
                 )}
               </>
-            ) : (
+            )}
+
+            {/* === CREDIT (Payment) === */}
+            {txType === "credit" && (
               <>
                 <FormField control={form.control} name="amount" render={({ field }) => (
                   <FormItem><FormLabel>المبلغ</FormLabel><FormControl><Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
                 )} />
-                <FormField control={form.control} name="bank_id" render={({ field }) => (
+                <FormField control={form.control} name="payment_source" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>مصدر الدفع (البنك) <span className="text-destructive">*</span></FormLabel>
+                    <FormLabel>مصدر الدفع <span className="text-destructive">*</span></FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="اختر البنك أو المحفظة" />
-                        </SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="اختر مصدر الدفع" /></SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {banks.map((bank) => (
-                          <SelectItem key={bank.id} value={bank.id}>
-                            {bank.name}
-                          </SelectItem>
+                        {CASH_SOURCES.map((src) => (
+                          <SelectItem key={src.id} value={src.id}>{src.name}</SelectItem>
                         ))}
+                        {banks.length > 0 && (
+                          <>
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-t mt-1 pt-1">البنوك</div>
+                            {banks.map((bank) => (
+                              <SelectItem key={bank.id} value={bank.id}>{bank.name}</SelectItem>
+                            ))}
+                          </>
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
+                )} />
+              </>
+            )}
+
+            {/* === MANUAL ADJUSTMENT === */}
+            {txType === "manual" && (
+              <>
+                <FormField control={form.control} name="description" render={({ field }) => (
+                  <FormItem><FormLabel>التفاصيل</FormLabel><FormControl><Input {...field} placeholder="مثال: خصم اتفاق" /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="amount" render={({ field }) => (
+                  <FormItem><FormLabel>المبلغ (موجب = عليه، سالب = له)</FormLabel><FormControl><Input type="number" step="0.01" {...field} dir="ltr" className="text-left" /></FormControl><FormMessage /></FormItem>
                 )} />
               </>
             )}

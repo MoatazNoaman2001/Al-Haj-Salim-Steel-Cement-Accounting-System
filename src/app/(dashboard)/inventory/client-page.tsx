@@ -13,7 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { INVENTORY_TABLE_HEADERS } from "@/lib/constants";
 import { formatCurrency, formatQuantity, formatDate } from "@/lib/utils";
-import { useRealtimeInventory } from "@/hooks/use-realtime";
+import { useOfflineQuery } from "@/hooks/use-offline-query";
 import { exportInventoryReport } from "@/lib/export-excel";
 import type { DailyInventoryWithProduct, Product } from "@/types/database";
 
@@ -52,10 +52,32 @@ export function InventoryClient({ products, inventory, sales, initialDate, initi
   const router = useRouter();
   const [calendarOpen, setCalendarOpen] = useState(false);
 
-  useRealtimeInventory(initialDate);
+  const { data: inventoryData } = useOfflineQuery<{ products: typeof products; inventory: typeof inventory; sales: typeof sales }>({
+    key: `inventory:${initialDate}:${initialCategory}`,
+    queryFn: async (supabase) => {
+      const [pRes, iRes, sRes] = await Promise.all([
+        supabase.from("products").select("id, name, category").eq("category", initialCategory).eq("is_active", true).order("name"),
+        supabase.from("daily_inventory").select("*, product:products!product_id(id, name)").eq("entry_date", initialDate),
+        supabase.from("daily_cement").select("product_id, quantity, is_corrected, customer:customers!customer_id(id, name)").eq("entry_date", initialDate).eq("is_corrected", false),
+      ]);
+      if (pRes.error || iRes.error || sRes.error) return { data: null, error: pRes.error || iRes.error || sRes.error };
+      const productIds = new Set((pRes.data ?? []).map((p: any) => p.id));
+      const filteredSales = (sRes.data ?? []).filter((s: any) => productIds.has(s.product_id)).map((s: any) => ({
+        ...s, customer: Array.isArray(s.customer) ? s.customer[0] ?? null : s.customer,
+      }));
+      return { data: { products: pRes.data ?? [], inventory: iRes.data ?? [], sales: filteredSales }, error: null };
+    },
+    fallback: { products, inventory, sales },
+    realtimeTable: "daily_inventory",
+    realtimeFilter: `entry_date=eq.${initialDate}`,
+  });
+
+  const pData = inventoryData.products;
+  const iData = inventoryData.inventory;
+  const sData = inventoryData.sales;
 
   // TODO: Remove mock fallback after testing
-  const effectiveSales = sales.length > 0 ? sales : getMockSales(products);
+  const effectiveSales = sData.length > 0 ? sData : getMockSales(pData);
 
   const { soldByProduct, customersByProduct } = useMemo(() => {
     const soldMap: Record<string, number> = {};
@@ -75,8 +97,8 @@ export function InventoryClient({ products, inventory, sales, initialDate, initi
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
 
   const rows = useMemo(() => {
-    return products.map((product) => {
-      const inv = inventory.find((i) => i.product_id === product.id);
+    return pData.map((product) => {
+      const inv = iData.find((i) => i.product_id === product.id);
       const previousBalance = inv?.previous_balance ?? 0;
       const added = inv?.added ?? 0;
       const sold = soldByProduct[product.id] ?? 0;
@@ -85,7 +107,7 @@ export function InventoryClient({ products, inventory, sales, initialDate, initi
       const customers = customersByProduct[product.id] ?? [];
       return { product, previousBalance, added, sold, netRemaining, costPrice, remainingCost: netRemaining * costPrice, customers };
     });
-  }, [products, inventory, soldByProduct, customersByProduct]);
+  }, [pData, iData, soldByProduct, customersByProduct]);
 
   const totalRemainingCost = rows.reduce((sum, r) => sum + r.remainingCost, 0);
 

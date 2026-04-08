@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BANK_TABLE_HEADERS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
-import { useRealtimeBanks } from "@/hooks/use-realtime";
+import { useOfflineQuery } from "@/hooks/use-offline-query";
 import { useUser } from "@/hooks/use-user";
 import { AddBankDialog } from "./add-bank-dialog";
 import { EditBankDialog } from "./edit-bank-dialog";
@@ -33,14 +33,39 @@ export function BanksClient({ banks }: BanksClientProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editBank, setEditBank] = useState<BankWithTotals | null>(null);
   const [deleteBank, setDeleteBank] = useState<BankWithTotals | null>(null);
-
-  useRealtimeBanks();
+  const { data } = useOfflineQuery<BankWithTotals[]>({
+    key: "banks-with-totals",
+    queryFn: async (supabase) => {
+      const [{ data: bankList, error: e1 }, { data: txList, error: e2 }] = await Promise.all([
+        supabase.from("banks").select("*").eq("is_active", true).order("created_at", { ascending: true }),
+        supabase.from("bank_transactions").select("bank_id, debit, credit").eq("is_corrected", false),
+      ]);
+      if (e1 || e2) return { data: null, error: e1 || e2 };
+      const totals: Record<string, { d: number; c: number }> = {};
+      (txList ?? []).forEach((tx: any) => {
+        if (!totals[tx.bank_id]) totals[tx.bank_id] = { d: 0, c: 0 };
+        totals[tx.bank_id].d += tx.debit;
+        totals[tx.bank_id].c += tx.credit;
+      });
+      return {
+        data: (bankList ?? []).map((b: any) => ({
+          ...b,
+          totalDebit: totals[b.id]?.d ?? 0,
+          totalCredit: totals[b.id]?.c ?? 0,
+          currentBalance: b.balance + (totals[b.id]?.c ?? 0) - (totals[b.id]?.d ?? 0),
+        })),
+        error: null,
+      };
+    },
+    fallback: banks,
+    realtimeTable: "bank_transactions",
+  });
 
   const { grandDebit, grandCredit, grandBalance } = useMemo(() => ({
-    grandDebit: banks.reduce((sum, b) => sum + b.totalDebit, 0),
-    grandCredit: banks.reduce((sum, b) => sum + b.totalCredit, 0),
-    grandBalance: banks.reduce((sum, b) => sum + b.currentBalance, 0),
-  }), [banks]);
+    grandDebit: data.reduce((sum, b) => sum + b.totalDebit, 0),
+    grandCredit: data.reduce((sum, b) => sum + b.totalCredit, 0),
+    grandBalance: data.reduce((sum, b) => sum + b.currentBalance, 0),
+  }), [data]);
 
   return (
     <div>
@@ -54,7 +79,7 @@ export function BanksClient({ banks }: BanksClientProps) {
                 <p className="text-2xl font-bold">{formatCurrency(grandBalance)}</p>
               </div>
             </div>
-            <Badge variant="secondary">{banks.length} حساب</Badge>
+            <Badge variant="secondary">{data.length} حساب</Badge>
           </CardContent>
         </Card>
         {isAdmin && (
@@ -78,7 +103,7 @@ export function BanksClient({ banks }: BanksClientProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {banks.length ? banks.map((bank, index) => (
+            {data.length ? data.map((bank, index) => (
               <TableRow key={bank.id} className="hover:bg-muted/50">
                 <TableCell>{index + 1}</TableCell>
                 <TableCell className="font-medium">
@@ -104,7 +129,7 @@ export function BanksClient({ banks }: BanksClientProps) {
               <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">لا توجد حسابات بنكية</TableCell></TableRow>
             )}
           </TableBody>
-          {banks.length > 0 && (
+          {data.length > 0 && (
             <TableFooter>
               <TableRow className="font-bold bg-muted/50">
                 <TableCell colSpan={2}>الإجمالي</TableCell>

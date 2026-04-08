@@ -5,7 +5,6 @@ import { Plus, ArrowRight, Pencil, Trash2, Download } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import {
   Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -15,7 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { BANK_TABLE_HEADERS, MESSAGES } from "@/lib/constants";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
-import { useRealtimeBankTransactions } from "@/hooks/use-realtime";
+import { useOfflineQuery } from "@/hooks/use-offline-query";
+import { safeUpdate } from "@/lib/supabase/safe-fetch";
 import { AddBankTransactionDialog } from "./add-transaction-dialog";
 import { BankCorrectionDialog } from "./correction-dialog";
 import {
@@ -27,7 +27,8 @@ import { exportBankReport } from "@/lib/export-excel";
 import type { Bank, BankTransactionWithCreator, ActionRequestWithRelations } from "@/types/database";
 
 interface BankDetailClientProps {
-  bank: Bank;
+  bankId: string;
+  bank: Bank | null;
   transactions: BankTransactionWithCreator[];
   editHistory: ActionRequestWithRelations[];
 }
@@ -54,20 +55,34 @@ const FIELD_LABELS: Record<string, string> = {
   balance: "الرصيد الافتتاحي",
 };
 
-export function BankDetailClient({ bank, transactions, editHistory }: BankDetailClientProps) {
+export function BankDetailClient({ bankId, bank: serverBank, transactions, editHistory }: BankDetailClientProps) {
   const { userId, isAdmin } = useUser();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [correctionEntry, setCorrectionEntry] = useState<BankTransactionWithCreator | null>(null);
   const [deleteEntry, setDeleteEntry] = useState<BankTransactionWithCreator | null>(null);
   const [deleting, setDeleting] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
+  const { data: bank } = useOfflineQuery<Bank | null>({
+    key: `bank:${bankId}`,
+    queryFn: (sb) => sb.from("banks").select("*").eq("id", bankId).single(),
+    fallback: serverBank,
+  });
 
-  useRealtimeBankTransactions(bank.id);
+  const { data: txData } = useOfflineQuery<BankTransactionWithCreator[]>({
+    key: `bank-tx:${bankId}`,
+    queryFn: (sb) => sb.from("bank_transactions").select("*, creator:profiles!created_by(id, full_name)").eq("bank_id", bankId).order("entry_date", { ascending: true }).order("row_number", { ascending: true }),
+    fallback: transactions,
+    realtimeTable: "bank_transactions",
+    realtimeFilter: `bank_id=eq.${bankId}`,
+  });
+
+  if (!bank) {
+    return <div className="flex items-center justify-center h-48 text-muted-foreground">جاري التحميل من الذاكرة المحلية...</div>;
+  }
 
   const { rows, totalDebit, totalCredit, currentBalance } = useMemo(() => {
     let runningBalance = bank.balance;
-    const activeEntries = transactions.filter((e) => !e.is_corrected);
+    const activeEntries = txData.filter((e) => !e.is_corrected);
     const computedRows = activeEntries.map((entry) => {
       runningBalance += entry.credit - entry.debit;
       return { ...entry, runningBalance };
@@ -75,17 +90,13 @@ export function BankDetailClient({ bank, transactions, editHistory }: BankDetail
     const totalDebit = activeEntries.reduce((sum, e) => sum + e.debit, 0);
     const totalCredit = activeEntries.reduce((sum, e) => sum + e.credit, 0);
     return { rows: computedRows, totalDebit, totalCredit, currentBalance: bank.balance + totalCredit - totalDebit };
-  }, [bank.balance, transactions]);
+  }, [bank.balance, txData]);
 
   async function handleDelete() {
     if (!deleteEntry) return;
     setDeleting(true);
 
-    // Mark original as corrected
-    const { error: updateError } = await supabase
-      .from("bank_transactions")
-      .update({ is_corrected: true })
-      .eq("id", deleteEntry.id);
+    const { error: updateError } = await safeUpdate("bank_transactions", { is_corrected: true }, { id: deleteEntry.id });
 
     if (updateError) { toast.error(MESSAGES.error); setDeleting(false); return; }
 

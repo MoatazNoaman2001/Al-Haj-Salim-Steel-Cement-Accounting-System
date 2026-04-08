@@ -6,7 +6,7 @@ import { z } from "zod/v4";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Landmark } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { safeInsert } from "@/lib/supabase/safe-fetch";
 import { MESSAGES } from "@/lib/constants";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -33,7 +33,6 @@ interface AddBankDialogProps {
 }
 
 export function AddBankDialog({ open, onOpenChange }: AddBankDialogProps) {
-  const supabase = createClient();
   const router = useRouter();
 
   const form = useForm<AddBankFormValues>({
@@ -44,7 +43,7 @@ export function AddBankDialog({ open, onOpenChange }: AddBankDialogProps) {
   async function onSubmit(values: AddBankFormValues) {
     const balance = Number(values.balance) || 0;
 
-    const { error } = await supabase.from("banks").insert({
+    const { error } = await safeInsert("banks",{
       name: values.name,
       balance,
     });

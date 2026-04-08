@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v4";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { safeInsert } from "@/lib/supabase/safe-fetch";
 import { MESSAGES } from "@/lib/constants";
 import { todayISO } from "@/lib/utils";
 import {
@@ -34,7 +34,6 @@ interface AddBankTransactionDialogProps {
 }
 
 export function AddBankTransactionDialog({ open, onOpenChange, bankId, userId }: AddBankTransactionDialogProps) {
-  const supabase = createClient();
   const router = useRouter();
 
   const form = useForm<FormValues>({
@@ -48,7 +47,7 @@ export function AddBankTransactionDialog({ open, onOpenChange, bankId, userId }:
 
     if (debit === 0 && credit === 0) { toast.error("يجب إدخال قيمة في مدين أو دائن"); return; }
 
-    const { error } = await supabase.from("bank_transactions").insert({
+    const { error } = await safeInsert("bank_transactions",{
       bank_id: bankId, entry_date: values.entry_date, description: values.description,
       debit, credit, created_by: userId,
     });

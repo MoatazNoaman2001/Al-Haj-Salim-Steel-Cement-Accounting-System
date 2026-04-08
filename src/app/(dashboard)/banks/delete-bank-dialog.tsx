@@ -6,7 +6,7 @@ import { z } from "zod/v4";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { safeInsert } from "@/lib/supabase/safe-fetch";
 import { MESSAGES } from "@/lib/constants";
 import { useUser } from "@/hooks/use-user";
 import {
@@ -32,7 +32,6 @@ interface DeleteBankDialogProps {
 }
 
 export function DeleteBankDialog({ bank, onClose }: DeleteBankDialogProps) {
-  const supabase = createClient();
   const router = useRouter();
   const { userId } = useUser();
 
@@ -44,7 +43,7 @@ export function DeleteBankDialog({ bank, onClose }: DeleteBankDialogProps) {
   async function onSubmit(values: DeleteBankFormValues) {
     if (!bank) return;
 
-    const { error } = await supabase.from("action_requests").insert({
+    const { error } = await safeInsert("action_requests",{
       action: "delete",
       entity: "bank",
       entity_id: bank.id,

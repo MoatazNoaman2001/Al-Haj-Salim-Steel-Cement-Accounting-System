@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v4";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { safeInsert, safeUpdate } from "@/lib/supabase/safe-fetch";
 import { MESSAGES } from "@/lib/constants";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -43,7 +43,6 @@ interface CustomerCorrectionDialogProps {
 }
 
 export function CustomerCorrectionDialog({ entry, onClose, userId, banks, customerName }: CustomerCorrectionDialogProps) {
-  const supabase = createClient();
   const router = useRouter();
 
   const form = useForm<FormValues>({
@@ -93,16 +92,10 @@ export function CustomerCorrectionDialog({ entry, onClose, userId, banks, custom
       return;
     }
 
-    // Mark original as corrected
-    const { error: updateError } = await supabase
-      .from("customer_transactions")
-      .update({ is_corrected: true })
-      .eq("id", entry.id);
-
+    const { error: updateError } = await safeUpdate("customer_transactions", { is_corrected: true }, { id: entry.id });
     if (updateError) { toast.error(MESSAGES.error); return; }
 
-    // Create new corrected entry
-    const { error: insertError } = await supabase.from("customer_transactions").insert({
+    const { error: insertError } = await safeInsert("customer_transactions", {
       customer_id: entry.customer_id,
       entry_date: values.entry_date,
       description: values.description,
@@ -116,12 +109,10 @@ export function CustomerCorrectionDialog({ entry, onClose, userId, banks, custom
       correction_reason: values.reason,
       created_by: userId,
     });
-
     if (insertError) { toast.error(MESSAGES.error); return; }
 
-    // If credit with bank, also create corresponding bank transaction
     if (newCredit > 0 && values.bank_id) {
-      await supabase.from("bank_transactions").insert({
+      await safeInsert("bank_transactions", {
         bank_id: values.bank_id,
         entry_date: values.entry_date,
         description: customerName,

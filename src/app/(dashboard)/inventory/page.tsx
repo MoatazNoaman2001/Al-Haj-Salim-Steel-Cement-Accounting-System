@@ -13,28 +13,39 @@ export default async function InventoryPage({ searchParams }: PageProps) {
   const category = params.category || "cement";
   const supabase = await createClient();
 
-  const { data: products } = await supabase
-    .from("products").select("id, name, category").eq("category", category).eq("is_active", true).order("name");
+  let products: any[] = [];
+  let inventory: any[] = [];
+  let filteredSales: any[] = [];
 
-  const { data: inventory } = await supabase
-    .from("daily_inventory").select(`*, product:products!product_id(id, name)`).eq("entry_date", date);
+  try {
+    const { data: productsData } = await supabase
+      .from("products").select("id, name, category").eq("category", category).eq("is_active", true).order("name");
 
-  const { data: sales } = await supabase
-    .from("daily_cement").select("product_id, quantity, is_corrected, customer:customers!customer_id(id, name)").eq("entry_date", date).eq("is_corrected", false);
+    const { data: inventoryData } = await supabase
+      .from("daily_inventory").select(`*, product:products!product_id(id, name)`).eq("entry_date", date);
 
-  const productIds = new Set((products ?? []).map((p) => p.id));
-  const filteredSales = (sales ?? [])
-    .filter((s) => productIds.has(s.product_id))
-    .map((s) => ({
-      ...s,
-      customer: Array.isArray(s.customer) ? s.customer[0] ?? null : s.customer,
-    }));
+    const { data: salesData } = await supabase
+      .from("daily_cement").select("product_id, quantity, is_corrected, customer:customers!customer_id(id, name)").eq("entry_date", date).eq("is_corrected", false);
+
+    products = productsData ?? [];
+    inventory = inventoryData ?? [];
+
+    const productIds = new Set((productsData ?? []).map((p) => p.id));
+    filteredSales = (salesData ?? [])
+      .filter((s) => productIds.has(s.product_id))
+      .map((s) => ({
+        ...s,
+        customer: Array.isArray(s.customer) ? s.customer[0] ?? null : s.customer,
+      }));
+  } catch {
+    // Offline
+  }
 
   return (
     <div className="flex flex-col h-full">
       <Header title="الجرد" />
       <div className="flex-1 overflow-auto px-6 pb-6">
-        <InventoryClient products={products ?? []} inventory={inventory ?? []} sales={filteredSales} initialDate={date} initialCategory={category} />
+        <InventoryClient products={products} inventory={inventory} sales={filteredSales} initialDate={date} initialCategory={category} />
       </div>
     </div>
   );

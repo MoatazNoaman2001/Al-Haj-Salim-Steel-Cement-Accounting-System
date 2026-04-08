@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
+import { safeInsert } from "@/lib/supabase/safe-fetch";
 import { MESSAGES } from "@/lib/constants";
 import {
   addCashierEntrySchema,
@@ -40,7 +40,6 @@ export function AddCashierEntryDialog({
   date,
   userId,
 }: AddCashierEntryDialogProps) {
-  const supabase = createClient();
   const router = useRouter();
 
   const form = useForm<AddCashierEntryFormValues>({
@@ -62,7 +61,7 @@ export function AddCashierEntryDialog({
       return;
     }
 
-    const { error } = await supabase.from("daily_cashier").insert({
+    const { error } = await safeInsert("daily_cashier",{
       entry_date: values.entry_date,
       description: values.description,
       debit,

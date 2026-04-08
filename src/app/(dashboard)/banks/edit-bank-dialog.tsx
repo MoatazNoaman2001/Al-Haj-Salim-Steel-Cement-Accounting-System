@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Landmark, History } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { safeInsert } from "@/lib/supabase/safe-fetch";
 import { MESSAGES } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
@@ -110,7 +111,7 @@ export function EditBankDialog({ bank, onClose }: EditBankDialogProps) {
     if (values.name !== bank.name) proposedChanges.name = values.name;
     if (newBalance !== bank.balance) proposedChanges.balance = newBalance;
 
-    const { error } = await supabase.from("action_requests").insert({
+    const { error } = await safeInsert("action_requests",{
       action: "edit",
       entity: "bank",
       entity_id: bank.id,

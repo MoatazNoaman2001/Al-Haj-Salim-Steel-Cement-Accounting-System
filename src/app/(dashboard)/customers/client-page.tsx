@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { useRealtimeCustomers } from "@/hooks/use-realtime";
+import { useOfflineQuery } from "@/hooks/use-offline-query";
 import { AddCustomerDialog } from "./add-customer-dialog";
 import { useUser } from "@/hooks/use-user";
 import { formatCurrency } from "@/lib/utils";
@@ -29,18 +29,23 @@ export function CustomersClient({ customers }: CustomersClientProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  useRealtimeCustomers();
+  const { data } = useOfflineQuery<CustomerWithBalance[]>({
+    key: "customers",
+    queryFn: (supabase) => supabase.from("customer_balances").select("*").order("name", { ascending: true }),
+    fallback: customers,
+    realtimeTable: "customers",
+  });
 
   const filtered = useMemo(() => {
-    if (!search) return customers;
+    if (!search) return data;
     const s = search.toLowerCase();
-    return customers.filter(
+    return data.filter(
       (c) =>
         c.name.toLowerCase().includes(s) ||
         c.phone?.toLowerCase().includes(s) ||
         c.address?.toLowerCase().includes(s)
     );
-  }, [customers, search]);
+  }, [data, search]);
 
   return (
     <div>

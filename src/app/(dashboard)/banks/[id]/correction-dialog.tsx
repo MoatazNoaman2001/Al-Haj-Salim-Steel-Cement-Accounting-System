@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v4";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { safeInsert, safeUpdate } from "@/lib/supabase/safe-fetch";
 import { MESSAGES } from "@/lib/constants";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -35,7 +35,6 @@ interface BankCorrectionDialogProps {
 }
 
 export function BankCorrectionDialog({ entry, onClose, userId }: BankCorrectionDialogProps) {
-  const supabase = createClient();
   const router = useRouter();
 
   const form = useForm<FormValues>({
@@ -72,16 +71,10 @@ export function BankCorrectionDialog({ entry, onClose, userId }: BankCorrectionD
       return;
     }
 
-    // Mark original as corrected
-    const { error: updateError } = await supabase
-      .from("bank_transactions")
-      .update({ is_corrected: true })
-      .eq("id", entry.id);
-
+    const { error: updateError } = await safeUpdate("bank_transactions", { is_corrected: true }, { id: entry.id });
     if (updateError) { toast.error(MESSAGES.error); return; }
 
-    // Create new corrected entry
-    const { error: insertError } = await supabase.from("bank_transactions").insert({
+    const { error: insertError } = await safeInsert("bank_transactions", {
       bank_id: entry.bank_id,
       entry_date: values.entry_date,
       description: values.description,
@@ -91,7 +84,6 @@ export function BankCorrectionDialog({ entry, onClose, userId }: BankCorrectionD
       correction_reason: values.reason,
       created_by: userId,
     });
-
     if (insertError) { toast.error(MESSAGES.error); return; }
 
     toast.success("تم التصحيح بنجاح");

@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v4";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { safeInsert } from "@/lib/supabase/safe-fetch";
 import { MESSAGES } from "@/lib/constants";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -32,7 +32,6 @@ interface AddCustomerDialogProps {
 }
 
 export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps) {
-  const supabase = createClient();
   const router = useRouter();
 
   const form = useForm<AddCustomerFormValues>({
@@ -41,7 +40,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
   });
 
   async function onSubmit(values: AddCustomerFormValues) {
-    const { error } = await supabase.from("customers").insert({
+    const { error } = await safeInsert("customers",{
       name: values.name,
       phone: values.phone || null,
       address: values.address || null,
