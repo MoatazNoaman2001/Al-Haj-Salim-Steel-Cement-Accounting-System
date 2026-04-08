@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "@fontsource/cairo/400.css";
 import "@fontsource/cairo/500.css";
 import "@fontsource/cairo/600.css";
@@ -10,6 +10,19 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "شركة الحاج سليم - نظام الحسابات",
   description: "نظام إدارة حسابات شركة الحاج سليم لتوزيع الحديد والأسمنت",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "الحاج سليم",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1e3a5f",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
