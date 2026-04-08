@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { safeInsert, safeUpdate, safeDelete } from "@/lib/supabase/safe-fetch";
 import { cementDailyKeys } from "@/lib/react-query/keys";
 import { MESSAGES } from "@/lib/constants";
 
@@ -11,8 +12,7 @@ export function useAddCementEntry(date: string) {
 
   return useMutation({
     mutationFn: async (insertData: Record<string, unknown>) => {
-      const supabase = createClient();
-      const { error } = await supabase.from("daily_cement").insert(insertData);
+      const { error } = await safeInsert("daily_cement", insertData);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -36,8 +36,7 @@ export function useAddDeposit(date: string) {
       description: string | null;
       created_by: string;
     }) => {
-      const supabase = createClient();
-      const { error } = await supabase.from("daily_deposits").insert(insertData);
+      const { error } = await safeInsert("daily_deposits", insertData);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -55,11 +54,7 @@ export function useDeleteDeposit(date: string) {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("daily_deposits")
-        .delete()
-        .eq("id", id);
+      const { error } = await safeDelete("daily_deposits", { id });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -83,18 +78,14 @@ export function useUpsertInventory(date: string) {
       inventoryId: string | null;
       upsertData: Record<string, unknown>;
     }) => {
-      const supabase = createClient();
       const { error } = inventoryId
-        ? await supabase
-            .from("daily_inventory")
-            .update({
-              previous_balance: upsertData.previous_balance,
-              added: upsertData.added,
-              cost_price: upsertData.cost_price,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", inventoryId)
-        : await supabase.from("daily_inventory").insert(upsertData);
+        ? await safeUpdate("daily_inventory", {
+            previous_balance: upsertData.previous_balance,
+            added: upsertData.added,
+            cost_price: upsertData.cost_price,
+            updated_at: new Date().toISOString(),
+          }, { id: inventoryId })
+        : await safeInsert("daily_inventory", upsertData);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -115,10 +106,7 @@ export function useRequestCorrection() {
       reason: string;
       requested_by: string;
     }) => {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("correction_requests")
-        .insert(insertData);
+      const { error } = await safeInsert("correction_requests", insertData);
       if (error) throw error;
     },
     onSuccess: () => {

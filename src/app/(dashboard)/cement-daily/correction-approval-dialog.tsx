@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { MESSAGES } from "@/lib/constants";
 import { formatCurrency, formatQuantity } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
+import { safeUpdate } from "@/lib/supabase/safe-fetch";
 import {
   Dialog,
   DialogContent,
@@ -39,7 +40,6 @@ export function CorrectionApprovalDialog({
   request,
   onClose,
 }: CorrectionApprovalDialogProps) {
-  const supabase = createClient();
   const router = useRouter();
   const { userId } = useUser();
   const [rejectionReason, setRejectionReason] = useState("");
@@ -47,8 +47,13 @@ export function CorrectionApprovalDialog({
 
   async function handleApprove() {
     if (!request) return;
+    if (userId === "offline") {
+      toast.error("خطأ: لم يتم تحميل بيانات المستخدم بعد — أعد المحاولة");
+      return;
+    }
     setLoading(true);
 
+    const supabase = createClient();
     const { error } = await supabase.rpc("approve_correction", {
       p_request_id: request.id,
       p_admin_id: userId,
@@ -74,15 +79,12 @@ export function CorrectionApprovalDialog({
     }
     setLoading(true);
 
-    const { error } = await supabase
-      .from("correction_requests")
-      .update({
-        status: "rejected",
-        reviewed_by: userId,
-        reviewed_at: new Date().toISOString(),
-        rejection_reason: rejectionReason,
-      })
-      .eq("id", request.id);
+    const { error } = await safeUpdate("correction_requests", {
+      status: "rejected",
+      reviewed_by: userId,
+      reviewed_at: new Date().toISOString(),
+      rejection_reason: rejectionReason,
+    }, { id: request.id });
 
     if (error) {
       toast.error(MESSAGES.error);

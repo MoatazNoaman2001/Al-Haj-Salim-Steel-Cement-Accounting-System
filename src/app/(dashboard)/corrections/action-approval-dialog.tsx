@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { MESSAGES } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
+import { safeUpdate, safeDelete } from "@/lib/supabase/safe-fetch";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -48,7 +48,6 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 export function ActionApprovalDialog({ request, onClose }: ActionApprovalDialogProps) {
-  const supabase = createClient();
   const router = useRouter();
   const { userId } = useUser();
   const [rejectionReason, setRejectionReason] = useState("");
@@ -60,42 +59,29 @@ export function ActionApprovalDialog({ request, onClose }: ActionApprovalDialogP
 
     try {
       // Update the action request status
-      const { error: updateError } = await supabase
-        .from("action_requests")
-        .update({
-          status: "approved",
-          reviewed_by: userId,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq("id", request.id);
+      const { error: updateError } = await safeUpdate("action_requests", {
+        status: "approved",
+        reviewed_by: userId,
+        reviewed_at: new Date().toISOString(),
+      }, { id: request.id });
 
       if (updateError) throw updateError;
 
       // Execute the action
       if (request.action === "edit" && request.proposed_changes) {
-        const { error } = await supabase
-          .from(getTableName(request.entity))
-          .update(request.proposed_changes)
-          .eq("id", request.entity_id);
-
+        const { error } = await safeUpdate(
+          getTableName(request.entity),
+          request.proposed_changes as Record<string, unknown>,
+          { id: request.entity_id },
+        );
         if (error) throw error;
       } else if (request.action === "delete") {
         if (request.entity === "bank") {
-          // Delete bank transactions first, then the bank
-          await supabase
-            .from("bank_transactions")
-            .delete()
-            .eq("bank_id", request.entity_id);
-          const { error } = await supabase
-            .from("banks")
-            .delete()
-            .eq("id", request.entity_id);
+          await safeDelete("bank_transactions", { bank_id: request.entity_id });
+          const { error } = await safeDelete("banks", { id: request.entity_id });
           if (error) throw error;
         } else {
-          const { error } = await supabase
-            .from(getTableName(request.entity))
-            .delete()
-            .eq("id", request.entity_id);
+          const { error } = await safeDelete(getTableName(request.entity), { id: request.entity_id });
           if (error) throw error;
         }
       }
@@ -118,15 +104,12 @@ export function ActionApprovalDialog({ request, onClose }: ActionApprovalDialogP
     }
     setLoading(true);
 
-    const { error } = await supabase
-      .from("action_requests")
-      .update({
-        status: "rejected",
-        reviewed_by: userId,
-        reviewed_at: new Date().toISOString(),
-        rejection_reason: rejectionReason,
-      })
-      .eq("id", request.id);
+    const { error } = await safeUpdate("action_requests", {
+      status: "rejected",
+      reviewed_by: userId,
+      reviewed_at: new Date().toISOString(),
+      rejection_reason: rejectionReason,
+    }, { id: request.id });
 
     if (error) {
       toast.error(MESSAGES.error);
