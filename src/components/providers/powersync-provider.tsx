@@ -1,16 +1,17 @@
 "use client";
 
 // Provides the PowerSync database via @powersync/react's PowerSyncContext.
-// Children can then use usePowerSync() and useQuery() from @powersync/react.
 //
-// Fail-open design: if PowerSync fails to initialize (missing env var,
-// unreachable instance, WASM load failure), children still render without
-// the context. During the migration, pages fall back to the legacy
-// useOfflineQuery path in that case.
+// Fail-open design: the context wrapper is always present so children
+// don't remount when PowerSync finishes initializing. Consumers must
+// handle a null db (see use-ps-query.ts, use-cement-daily-*). If init
+// fails entirely, db stays null and consumers fall back to the legacy
+// React Query / Supabase path.
 
 import { useEffect, useState } from "react";
 import { PowerSyncContext } from "@powersync/react";
 import type { PowerSyncDatabase } from "@powersync/web";
+import type { AbstractPowerSyncDatabase } from "@powersync/common";
 import { getPowerSyncDB } from "@/lib/powersync/db";
 
 export function PowerSyncProvider({ children }: { children: React.ReactNode }) {
@@ -30,14 +31,13 @@ export function PowerSyncProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  if (!db) {
-    // Render children without PowerSyncContext. Pages that haven't been
-    // migrated yet use useOfflineQuery directly and don't need this context.
-    // Pages migrated in Phase 2+ should handle a missing context gracefully.
-    return <>{children}</>;
-  }
-
+  // The context's declared type is non-null AbstractPowerSyncDatabase, but we
+  // intentionally allow null here. usePowerSync() from @powersync/react reads
+  // this context with React.useContext — our consumer hooks check the result
+  // and fall back to the legacy path when it's null.
   return (
-    <PowerSyncContext.Provider value={db}>{children}</PowerSyncContext.Provider>
+    <PowerSyncContext.Provider value={db as unknown as AbstractPowerSyncDatabase}>
+      {children}
+    </PowerSyncContext.Provider>
   );
 }
