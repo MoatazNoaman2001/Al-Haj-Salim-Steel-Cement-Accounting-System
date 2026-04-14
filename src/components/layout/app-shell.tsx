@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { UserContext } from "@/hooks/use-user";
 import { QueryProvider } from "@/lib/react-query/provider";
+import { PowerSyncProvider } from "@/components/providers/powersync-provider";
 import { Sidebar } from "./sidebar";
 import { PageTransition } from "./page-transition";
 import { OfflineIndicator } from "./offline-indicator";
@@ -56,15 +57,17 @@ export function AppShell({ userId: serverUserId, profile: serverProfile, childre
         isAdmin: profile.role === "admin",
       }}
     >
-      <QueryProvider>
-        <div className="flex h-screen">
-          <Sidebar />
-          <main className="flex-1 overflow-auto">
-            <PageTransition>{children}</PageTransition>
-          </main>
-          <OfflineIndicator />
-        </div>
-      </QueryProvider>
+      <PowerSyncProvider>
+        <QueryProvider>
+          <div className="flex h-screen">
+            <Sidebar />
+            <main className="flex-1 overflow-auto min-w-0">
+              <PageTransition>{children}</PageTransition>
+            </main>
+            <OfflineIndicator />
+          </div>
+        </QueryProvider>
+      </PowerSyncProvider>
     </UserContext.Provider>
   );
 }
