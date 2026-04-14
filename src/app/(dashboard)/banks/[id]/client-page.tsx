@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { exportBankReport } from "@/lib/export-excel";
+import { DevMockBanner } from "@/components/dev-mock-banner";
+import { IS_DEV_MOCK_ENABLED, isMockId, mockBankTransactions } from "@/lib/dev-mocks";
 import type { Bank, BankTransactionWithCreator, ActionRequestWithRelations } from "@/types/database";
 
 interface BankDetailClientProps {
@@ -68,13 +70,20 @@ export function BankDetailClient({ bankId, bank: serverBank, transactions, editH
     fallback: serverBank,
   });
 
-  const { data: txData } = useOfflineQuery<BankTransactionWithCreator[]>({
+  const { data: realTxData } = useOfflineQuery<BankTransactionWithCreator[]>({
     key: `bank-tx:${bankId}`,
     queryFn: (sb) => sb.from("bank_transactions").select("*, creator:profiles!created_by(id, full_name)").eq("bank_id", bankId).order("entry_date", { ascending: true }).order("row_number", { ascending: true }),
     fallback: transactions,
     realtimeTable: "bank_transactions",
     realtimeFilter: `bank_id=eq.${bankId}`,
   });
+
+  const txData = useMemo(() => {
+    if (realTxData.length > 0) return realTxData;
+    if (!IS_DEV_MOCK_ENABLED) return realTxData;
+    return mockBankTransactions(bankId, userId);
+  }, [realTxData, bankId, userId]);
+  const isUsingMock = txData !== realTxData && txData.length > 0;
 
   if (!bank) {
     return <div className="flex items-center justify-center h-48 text-muted-foreground">جاري التحميل من الذاكرة المحلية...</div>;
@@ -108,21 +117,22 @@ export function BankDetailClient({ bankId, bank: serverBank, transactions, editH
 
   return (
     <div>
-      <div className="flex items-center justify-between py-4">
-        <div className="flex items-center gap-3">
+      {isUsingMock && <DevMockBanner label="حركات بنك تجريبية" />}
+      <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 min-w-0">
           <Link href="/banks">
-            <Button variant="ghost" size="sm" className="gap-1"><ArrowRight className="h-4 w-4" />الصفحة الرئيسية</Button>
+            <Button variant="ghost" size="sm" className="gap-1 shrink-0"><ArrowRight className="h-4 w-4" />رجوع</Button>
           </Link>
-          <h3 className="text-lg font-bold">{bank.name}</h3>
+          <h3 className="text-lg font-bold truncate">{bank.name}</h3>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
             size="sm"
             className="gap-2"
             onClick={() => exportBankReport(bank.name, bank.balance, rows, totalDebit, totalCredit, currentBalance)}
           >
-            <Download className="h-4 w-4" />تصدير Excel
+            <Download className="h-4 w-4" /><span className="hidden sm:inline">تصدير Excel</span>
           </Button>
           <Button size="sm" className="gap-2" onClick={() => setAddDialogOpen(true)}>
             <Plus className="h-4 w-4" />إضافة عملية
@@ -130,7 +140,7 @@ export function BankDetailClient({ bankId, bank: serverBank, transactions, editH
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <Card><CardContent className="p-4">
           <p className="text-sm text-muted-foreground">إجمالي مدين</p>
           <p className="text-xl font-bold text-red-600">{formatCurrency(totalDebit)}</p>
@@ -145,7 +155,7 @@ export function BankDetailClient({ bankId, bank: serverBank, transactions, editH
         </CardContent></Card>
       </div>
 
-      <div className="rounded-md border">
+      <div className="hidden md:block rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -232,12 +242,165 @@ export function BankDetailClient({ bankId, bank: serverBank, transactions, editH
         </Table>
       </div>
 
+      {/* Mobile card view */}
+      <div className="md:hidden space-y-3">
+        {rows.length > 0 && (
+          <div className="rounded-lg border bg-muted/30 p-3 flex items-center justify-between">
+            <span className="font-medium text-sm">رصيد افتتاحي</span>
+            <span className="font-bold text-green-600">
+              {formatCurrency(bank.balance)}
+            </span>
+          </div>
+        )}
+        {rows.length ? (
+          <>
+            {rows.map((entry, index) => {
+              const isCorrected = entry.is_corrected;
+              const isCorrection = !!entry.correction_of_id;
+              const canAction = !isCorrected && !isCorrection;
+              return (
+                <div
+                  key={entry.id}
+                  className={cn(
+                    "rounded-lg border p-3 space-y-2 text-sm",
+                    isCorrected && "opacity-50 line-through bg-red-50",
+                    isCorrection && "bg-green-50",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>#{index + 1}</span>
+                        <span>{formatDate(entry.entry_date)}</span>
+                      </div>
+                      <div className="font-semibold mt-0.5 break-words">
+                        {entry.description}
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {isCorrected && (
+                          <Badge variant="destructive" className="text-[10px]">
+                            تم التصحيح
+                          </Badge>
+                        )}
+                        {isCorrection && (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] bg-green-100 text-green-800"
+                          >
+                            تصحيح
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    {isAdmin && canAction && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          disabled={isMockId(entry.id)}
+                          onClick={() =>
+                            !isMockId(entry.id) && setCorrectionEntry(entry)
+                          }
+                          title="تصحيح"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          disabled={isMockId(entry.id)}
+                          onClick={() =>
+                            !isMockId(entry.id) && setDeleteEntry(entry)
+                          }
+                          title="حذف"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t">
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {BANK_TABLE_HEADERS.debit}
+                      </div>
+                      <div
+                        className={
+                          entry.debit > 0 ? "text-red-600 font-semibold" : ""
+                        }
+                      >
+                        {entry.debit > 0 ? formatCurrency(entry.debit) : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {BANK_TABLE_HEADERS.credit}
+                      </div>
+                      <div
+                        className={
+                          entry.credit > 0 ? "text-green-600 font-semibold" : ""
+                        }
+                      >
+                        {entry.credit > 0 ? formatCurrency(entry.credit) : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {BANK_TABLE_HEADERS.balance}
+                      </div>
+                      <div className="font-bold">
+                        {formatCurrency(entry.runningBalance)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+              <div className="font-bold text-sm">الإجمالي</div>
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {BANK_TABLE_HEADERS.debit}
+                  </div>
+                  <div className="font-bold text-red-600">
+                    {formatCurrency(totalDebit)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {BANK_TABLE_HEADERS.credit}
+                  </div>
+                  <div className="font-bold text-green-600">
+                    {formatCurrency(totalCredit)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {BANK_TABLE_HEADERS.balance}
+                  </div>
+                  <div className="font-bold">
+                    {formatCurrency(currentBalance)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-lg border h-24 flex items-center justify-center text-muted-foreground text-sm">
+            لا توجد عمليات لهذا البنك
+          </div>
+        )}
+      </div>
+
       {/* Edit History Section */}
       {editHistory.length > 0 && (
         <div className="mt-6">
           <Separator className="mb-4" />
           <h3 className="text-lg font-bold mb-3">سجل التعديلات</h3>
-          <div className="rounded-md border">
+          <div className="hidden md:block rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -292,6 +455,53 @@ export function BankDetailClient({ bankId, bank: serverBank, transactions, editH
                 })}
               </TableBody>
             </Table>
+          </div>
+
+          {/* Mobile card view for edit history */}
+          <div className="md:hidden space-y-3">
+            {editHistory.map((req) => {
+              const changes = req.proposed_changes as Record<string, unknown> | null;
+              return (
+                <div key={req.id} className="rounded-lg border p-3 space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {formatDate(req.created_at)}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Badge
+                        variant={req.action === "delete" ? "destructive" : "outline"}
+                        className="text-[10px]"
+                      >
+                        {ACTION_LABELS[req.action]}
+                      </Badge>
+                      <Badge variant={STATUS_VARIANT[req.status]} className="text-[10px]">
+                        {STATUS_LABELS[req.status]}
+                      </Badge>
+                    </div>
+                  </div>
+                  {req.action === "edit" && changes ? (
+                    <div className="flex flex-wrap gap-1">
+                      {Object.entries(changes).map(([field, value]) => (
+                        <Badge key={field} variant="secondary" className="text-[10px]">
+                          {FIELD_LABELS[field] ?? field}:{" "}
+                          {typeof value === "number" ? formatCurrency(value) : String(value)}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-destructive text-xs">حذف كامل</div>
+                  )}
+                  <div className="text-xs">{req.reason}</div>
+                  <div className="text-[10px] text-muted-foreground flex items-center justify-between pt-2 border-t">
+                    <span>طلب: {req.requester?.full_name ?? "—"}</span>
+                    <span>راجع: {req.reviewer?.full_name ?? "—"}</span>
+                  </div>
+                  {req.rejection_reason && (
+                    <p className="text-xs text-destructive">{req.rejection_reason}</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

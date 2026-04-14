@@ -73,7 +73,7 @@ export function CorrectionsClient({ requests, actionRequests }: CorrectionsClien
           </TabsList>
 
           <TabsContent value="corrections">
-            <div className="rounded-md border">
+            <div className="hidden md:block rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -117,10 +117,55 @@ export function CorrectionsClient({ requests, actionRequests }: CorrectionsClien
                 </TableBody>
               </Table>
             </div>
+
+            {/* Mobile card view for corrections */}
+            <div className="md:hidden space-y-3">
+              {requests.length === 0 ? (
+                <div className="rounded-lg border h-24 flex items-center justify-center text-muted-foreground text-sm">
+                  لا توجد طلبات تصحيح
+                </div>
+              ) : (
+                requests.map((req) => (
+                  <div key={req.id} className="rounded-lg border p-3 space-y-2 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-muted-foreground">
+                          {formatDate(req.created_at)}
+                        </div>
+                        <div className="font-semibold mt-0.5">
+                          {req.entry?.customer?.name ?? "—"}
+                        </div>
+                      </div>
+                      <Badge
+                        variant={statusVariant[req.status] ?? "outline"}
+                        className="shrink-0 text-[10px]"
+                      >
+                        {CORRECTION_STATUS_LABELS[req.status]}
+                      </Badge>
+                    </div>
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">طلب بواسطة: </span>
+                      {req.requester?.full_name ?? "—"}
+                    </div>
+                    <div className="text-xs border-t pt-2">{req.reason}</div>
+                    {req.status === "pending" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => setSelectedRequest(req)}
+                      >
+                        مراجعة
+                      </Button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="actions">
-            <div className="rounded-md border">
+            <div className="hidden md:block rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -169,6 +214,59 @@ export function CorrectionsClient({ requests, actionRequests }: CorrectionsClien
                   )}
                 </TableBody>
               </Table>
+            </div>
+
+            {/* Mobile card view for actions */}
+            <div className="md:hidden space-y-3">
+              {actionRequests.length === 0 ? (
+                <div className="rounded-lg border h-24 flex items-center justify-center text-muted-foreground text-sm">
+                  لا توجد طلبات تعديل أو حذف
+                </div>
+              ) : (
+                actionRequests.map((req) => (
+                  <div key={req.id} className="rounded-lg border p-3 space-y-2 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-muted-foreground">
+                          {formatDate(req.created_at)}
+                        </div>
+                        <div className="flex items-center gap-1 mt-1 flex-wrap">
+                          <Badge
+                            variant={req.action === "delete" ? "destructive" : "outline"}
+                            className="text-[10px]"
+                          >
+                            {ACTION_LABELS[req.action]}
+                          </Badge>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {ENTITY_LABELS[req.entity]}
+                          </Badge>
+                        </div>
+                      </div>
+                      <Badge
+                        variant={statusVariant[req.status] ?? "outline"}
+                        className="shrink-0 text-[10px]"
+                      >
+                        {CORRECTION_STATUS_LABELS[req.status]}
+                      </Badge>
+                    </div>
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">طلب بواسطة: </span>
+                      {req.requester?.full_name ?? "—"}
+                    </div>
+                    <div className="text-xs border-t pt-2">{req.reason}</div>
+                    {req.status === "pending" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => setSelectedAction(req)}
+                      >
+                        مراجعة
+                      </Button>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </TabsContent>
         </Tabs>

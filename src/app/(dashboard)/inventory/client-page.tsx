@@ -133,7 +133,7 @@ export function InventoryClient({ products, inventory, sales, initialDate, initi
 
   return (
     <div>
-      <div className="flex items-center justify-between py-4">
+      <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
@@ -151,12 +151,12 @@ export function InventoryClient({ products, inventory, sales, initialDate, initi
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" size="sm" className="gap-2" onClick={handleExport}>
-          <Download className="h-4 w-4" />تصدير Excel
+        <Button variant="outline" size="sm" className="gap-2 shrink-0" onClick={handleExport}>
+          <Download className="h-4 w-4" /><span className="hidden sm:inline">تصدير Excel</span>
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      <div className="hidden md:block rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -220,6 +220,108 @@ export function InventoryClient({ products, inventory, sales, initialDate, initi
             </TableFooter>
           )}
         </Table>
+      </div>
+
+      {/* Mobile card view */}
+      <div className="md:hidden space-y-3">
+        {rows.length ? (
+          <>
+            {rows.map((row) => {
+              const isExpanded = expandedProduct === row.product.id;
+              const hasCust = row.customers.length > 0;
+              return (
+                <div key={row.product.id} className="rounded-lg border p-3 space-y-2">
+                  <div
+                    className={hasCust ? "cursor-pointer" : ""}
+                    onClick={() => hasCust && setExpandedProduct(isExpanded ? null : row.product.id)}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1 font-semibold">
+                        {hasCust && (
+                          isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />
+                        )}
+                        {row.product.name}
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] text-muted-foreground">
+                          {INVENTORY_TABLE_HEADERS.netRemaining}
+                        </div>
+                        <div className="font-bold">
+                          {formatQuantity(row.netRemaining)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t text-sm">
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {INVENTORY_TABLE_HEADERS.previousBalance}
+                      </div>
+                      <div>{formatQuantity(row.previousBalance)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {INVENTORY_TABLE_HEADERS.added}
+                      </div>
+                      <div className="text-green-600">
+                        {formatQuantity(row.added)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {INVENTORY_TABLE_HEADERS.sold}
+                      </div>
+                      <div className="text-red-600">
+                        {formatQuantity(row.sold)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {INVENTORY_TABLE_HEADERS.costPrice}
+                      </div>
+                      <div>{formatCurrency(row.costPrice)}</div>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="text-[10px] text-muted-foreground">
+                        {INVENTORY_TABLE_HEADERS.remainingCost}
+                      </div>
+                      <div className="font-bold">
+                        {formatCurrency(row.remainingCost)}
+                      </div>
+                    </div>
+                  </div>
+                  {isExpanded && row.customers.length > 0 && (
+                    <div className="pt-2 border-t space-y-1">
+                      <div className="text-[10px] text-muted-foreground mb-1">
+                        العملاء
+                      </div>
+                      {row.customers.map((cust) => (
+                        <Link
+                          key={cust.id}
+                          href={`/customers/${cust.id}`}
+                          className="flex items-center justify-between text-xs hover:underline"
+                        >
+                          <span className="text-primary">↳ {cust.name}</span>
+                          <span className="text-red-600 font-medium">
+                            {formatQuantity(cust.quantity)}
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <div className="rounded-lg border bg-muted/50 p-3 flex items-center justify-between">
+              <span className="font-bold text-sm">إجمالي تكلفة المخزون</span>
+              <span className="font-bold">{formatCurrency(totalRemainingCost)}</span>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-lg border h-24 flex items-center justify-center text-muted-foreground text-sm">
+            لا توجد بيانات جرد
+          </div>
+        )}
       </div>
     </div>
   );

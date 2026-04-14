@@ -69,7 +69,7 @@ export function BanksClient({ banks }: BanksClientProps) {
 
   return (
     <div>
-      <div className="flex items-center justify-between py-4">
+      <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
         <Card className="flex-1">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -83,14 +83,14 @@ export function BanksClient({ banks }: BanksClientProps) {
           </CardContent>
         </Card>
         {isAdmin && (
-          <Button size="sm" className="gap-2 ms-4" onClick={() => setAddDialogOpen(true)}>
+          <Button size="sm" className="gap-2 shrink-0" onClick={() => setAddDialogOpen(true)}>
             <Plus className="h-4 w-4" />
             إضافة بنك
           </Button>
         )}
       </div>
 
-      <div className="rounded-md border">
+      <div className="hidden md:block rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -141,6 +141,110 @@ export function BanksClient({ banks }: BanksClientProps) {
             </TableFooter>
           )}
         </Table>
+      </div>
+
+      {/* Mobile card view */}
+      <div className="md:hidden space-y-3">
+        {data.length ? (
+          <>
+            {data.map((bank, index) => (
+              <div key={bank.id} className="rounded-lg border p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        #{index + 1}
+                      </span>
+                      <Link
+                        href={`/banks/${bank.id}`}
+                        className="font-semibold hover:underline truncate"
+                      >
+                        {bank.name}
+                      </Link>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setEditBank(bank)}
+                      title="طلب تعديل"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => setDeleteBank(bank)}
+                      title="طلب حذف"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t text-sm">
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {BANK_TABLE_HEADERS.debit}
+                    </div>
+                    <div className="text-red-600 font-medium">
+                      {formatCurrency(bank.totalDebit)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {BANK_TABLE_HEADERS.credit}
+                    </div>
+                    <div className="text-green-600 font-medium">
+                      {formatCurrency(bank.totalCredit)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {BANK_TABLE_HEADERS.balance}
+                    </div>
+                    <div className="font-bold">
+                      {formatCurrency(bank.currentBalance)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+              <div className="font-bold text-sm">الإجمالي</div>
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {BANK_TABLE_HEADERS.debit}
+                  </div>
+                  <div className="font-bold text-red-600">
+                    {formatCurrency(grandDebit)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {BANK_TABLE_HEADERS.credit}
+                  </div>
+                  <div className="font-bold text-green-600">
+                    {formatCurrency(grandCredit)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {BANK_TABLE_HEADERS.balance}
+                  </div>
+                  <div className="font-bold">{formatCurrency(grandBalance)}</div>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-lg border h-24 flex items-center justify-center text-muted-foreground text-sm">
+            لا توجد حسابات بنكية
+          </div>
+        )}
       </div>
 
       <AddBankDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />

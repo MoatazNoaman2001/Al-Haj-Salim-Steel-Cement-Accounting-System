@@ -29,11 +29,11 @@ export function DataTableToolbar({
   onCustomerFilterChange,
 }: DataTableToolbarProps) {
   return (
-    <div className="flex items-center justify-between gap-4 py-4">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2 shrink-0">
               <CalendarIcon className="h-4 w-4" />
               {formatDate(date)}
             </Button>
@@ -55,13 +55,13 @@ export function DataTableToolbar({
           placeholder="بحث بالعميل..."
           value={customerFilter}
           onChange={(e) => onCustomerFilterChange(e.target.value)}
-          className="max-w-[200px]"
+          className="flex-1 sm:max-w-[200px]"
         />
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <Button variant="outline" size="sm" className="gap-2" onClick={onPrint}>
           <Printer className="h-4 w-4" />
-          طباعة
+          <span className="hidden sm:inline">طباعة</span>
         </Button>
         <Button className="gap-2" onClick={onAddEntry}>
           <Plus className="h-4 w-4" />

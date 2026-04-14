@@ -41,7 +41,7 @@ export default async function BankDetailPage({ params }: PageProps) {
   return (
     <div className="flex flex-col h-full">
       <Header title={bank ? `كشف حساب: ${bank.name}` : "كشف حساب"} />
-      <div className="flex-1 overflow-auto px-6 pb-6">
+      <div className="flex-1 overflow-auto px-4 pb-6 md:px-6">
         <BankDetailClient bankId={id} bank={bank} transactions={transactions} editHistory={editHistory} />
       </div>
     </div>

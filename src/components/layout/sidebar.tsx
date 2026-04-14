@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -13,6 +14,7 @@ import {
   Users,
   BarChart3,
   LogOut,
+  Menu,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { APP_NAME, NAV_ITEMS, ROLE_LABELS } from "@/lib/constants";
@@ -21,6 +23,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTitle,
+  DrawerDescription,
+} from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 
 const iconMap = {
@@ -35,7 +43,7 @@ const iconMap = {
   BarChart3,
 } as const;
 
-export function Sidebar() {
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const { profile, isAdmin } = useUser();
@@ -48,7 +56,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-s bg-sidebar text-sidebar-foreground">
+    <div className="flex h-full flex-col">
       <div className="p-4">
         <h1 className="text-lg font-bold">{APP_NAME}</h1>
         <p className="text-xs text-muted-foreground">نظام الحسابات</p>
@@ -65,6 +73,7 @@ export function Sidebar() {
               <Link
                 key={item.label}
                 href={item.active ? item.href : "#"}
+                onClick={onNavigate}
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                   isActive
@@ -106,6 +115,48 @@ export function Sidebar() {
           تسجيل الخروج
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** Desktop sidebar */
+export function Sidebar() {
+  return (
+    <aside className="hidden md:flex h-screen w-64 flex-col border-s bg-sidebar text-sidebar-foreground">
+      <SidebarContent />
     </aside>
+  );
+}
+
+/** Mobile drawer */
+export function MobileSidebar() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="md:hidden"
+        onClick={() => setOpen(true)}
+        aria-label="فتح القائمة"
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
+      <Drawer open={open} onOpenChange={setOpen} direction="right">
+        <DrawerContent
+          className={cn(
+            "end-auto! start-auto! right-0! left-auto!",
+            "h-full w-64 max-w-[80vw] bg-sidebar text-sidebar-foreground",
+          )}
+        >
+          <DrawerTitle className="sr-only">القائمة الرئيسية</DrawerTitle>
+          <DrawerDescription className="sr-only">
+            قائمة التنقل الرئيسية
+          </DrawerDescription>
+          <SidebarContent onNavigate={() => setOpen(false)} />
+        </DrawerContent>
+      </Drawer>
+    </>
   );
 }

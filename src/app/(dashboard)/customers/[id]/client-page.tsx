@@ -23,6 +23,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { exportCustomerReport } from "@/lib/export-excel";
+import { DevMockBanner } from "@/components/dev-mock-banner";
+import { IS_DEV_MOCK_ENABLED, isMockId, mockCustomerTransactions } from "@/lib/dev-mocks";
 import type { Customer, CustomerTransactionWithCreator, Bank } from "@/types/database";
 
 interface CustomerDetailClientProps {
@@ -45,13 +47,20 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
     fallback: serverCustomer,
   });
 
-  const { data: txData } = useOfflineQuery<CustomerTransactionWithCreator[]>({
+  const { data: realTxData } = useOfflineQuery<CustomerTransactionWithCreator[]>({
     key: `customer-tx:${customerId}`,
     queryFn: (sb) => sb.from("customer_transactions").select("*, creator:profiles!created_by(id, full_name)").eq("customer_id", customerId).order("entry_date", { ascending: true }).order("row_number", { ascending: true }),
     fallback: transactions,
     realtimeTable: "customer_transactions",
     realtimeFilter: `customer_id=eq.${customerId}`,
   });
+
+  const txData = useMemo(() => {
+    if (realTxData.length > 0) return realTxData;
+    if (!IS_DEV_MOCK_ENABLED) return realTxData;
+    return mockCustomerTransactions(customerId, userId);
+  }, [realTxData, customerId, userId]);
+  const isUsingMock = txData !== realTxData && txData.length > 0;
 
   const { data: bankData } = useOfflineQuery<Bank[]>({
     key: "banks-active",
@@ -99,24 +108,25 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
 
   return (
     <div>
-      <div className="flex items-center justify-between py-4">
-        <div className="flex items-center gap-3">
+      {isUsingMock && <DevMockBanner label="كشف حساب تجريبي" />}
+      <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 min-w-0">
           <Link href="/customers">
-            <Button variant="ghost" size="sm" className="gap-1"><ArrowRight className="h-4 w-4" />العملاء</Button>
+            <Button variant="ghost" size="sm" className="gap-1 shrink-0"><ArrowRight className="h-4 w-4" />رجوع</Button>
           </Link>
-          <div>
-            <h3 className="text-lg font-bold">{customer.name}</h3>
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold truncate">{customer.name}</h3>
             {customer.phone && <span className="text-sm text-muted-foreground" dir="ltr">{customer.phone}</span>}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
             size="sm"
             className="gap-2"
             onClick={() => exportCustomerReport(customer.name, rows, totalDebit, totalCredit, finalBalance)}
           >
-            <Download className="h-4 w-4" />تصدير Excel
+            <Download className="h-4 w-4" /><span className="hidden sm:inline">تصدير Excel</span>
           </Button>
           <Button size="sm" className="gap-2" onClick={() => setAddDialogOpen(true)}>
             <Plus className="h-4 w-4" />إضافة قيد
@@ -124,7 +134,7 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <Card><CardContent className="p-4">
           <p className="text-sm text-muted-foreground">إجمالي عليه</p>
           <p className="text-xl font-bold text-red-600">{formatCurrency(totalDebit)}</p>
@@ -144,7 +154,7 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
         </CardContent></Card>
       </div>
 
-      <div className="rounded-md border">
+      <div className="hidden md:block rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -222,6 +232,184 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
             </TableFooter>
           )}
         </Table>
+      </div>
+
+      {/* Mobile card view */}
+      <div className="md:hidden space-y-3">
+        {rows.length ? (
+          <>
+            {rows.map((entry, index) => {
+              const isCorrected = entry.is_corrected;
+              const isCorrection = !!entry.correction_of_id;
+              const canAction = !isCorrected && !isCorrection;
+              const bankName =
+                entry.source_type === "bank" && entry.source_id
+                  ? bankNameMap[entry.source_id]
+                  : "";
+              return (
+                <div
+                  key={entry.id}
+                  className={cn(
+                    "rounded-lg border p-3 space-y-2 text-sm",
+                    isCorrected && "opacity-50 line-through bg-red-50",
+                    isCorrection && "bg-green-50",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>#{index + 1}</span>
+                        <span>{formatDate(entry.entry_date)}</span>
+                      </div>
+                      <div className="font-semibold mt-0.5 break-words">
+                        {entry.description}
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {isCorrected && (
+                          <Badge variant="destructive" className="text-[10px]">
+                            تم التصحيح
+                          </Badge>
+                        )}
+                        {isCorrection && (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] bg-green-100 text-green-800"
+                          >
+                            تصحيح
+                          </Badge>
+                        )}
+                        {bankName && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {bankName}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    {isAdmin && canAction && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          disabled={isMockId(entry.id)}
+                          onClick={() =>
+                            !isMockId(entry.id) && setCorrectionEntry(entry)
+                          }
+                          title="تصحيح"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          disabled={isMockId(entry.id)}
+                          onClick={() =>
+                            !isMockId(entry.id) && setDeleteEntry(entry)
+                          }
+                          title="حذف"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  {(entry.quantity != null || entry.price != null) && (
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t text-xs">
+                      {entry.quantity != null && (
+                        <div>
+                          <span className="text-muted-foreground">
+                            {CUSTOMER_TX_HEADERS.quantity}:{" "}
+                          </span>
+                          <span className="font-medium">{entry.quantity}</span>
+                        </div>
+                      )}
+                      {entry.price != null && (
+                        <div>
+                          <span className="text-muted-foreground">
+                            {CUSTOMER_TX_HEADERS.price}:{" "}
+                          </span>
+                          <span className="font-medium">
+                            {formatCurrency(entry.price)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t">
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">عليه</div>
+                      <div
+                        className={
+                          entry.debit > 0 ? "text-red-600 font-semibold" : ""
+                        }
+                      >
+                        {entry.debit > 0 ? formatCurrency(entry.debit) : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">له</div>
+                      <div
+                        className={
+                          entry.credit > 0 ? "text-green-600 font-semibold" : ""
+                        }
+                      >
+                        {entry.credit > 0 ? formatCurrency(entry.credit) : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {CUSTOMER_TX_HEADERS.balance}
+                      </div>
+                      <div
+                        className={cn(
+                          "font-bold",
+                          entry.runningBalance > 0
+                            ? "text-red-600"
+                            : "text-green-600",
+                        )}
+                      >
+                        {formatCurrency(entry.runningBalance)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+              <div className="font-bold text-sm">الإجمالي</div>
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div>
+                  <div className="text-[10px] text-muted-foreground">عليه</div>
+                  <div className="font-bold text-red-600">
+                    {formatCurrency(totalDebit)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">له</div>
+                  <div className="font-bold text-green-600">
+                    {formatCurrency(totalCredit)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">الرصيد</div>
+                  <div
+                    className={cn(
+                      "font-bold",
+                      finalBalance > 0 ? "text-red-600" : "text-green-600",
+                    )}
+                  >
+                    {formatCurrency(finalBalance)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-lg border h-24 flex items-center justify-center text-muted-foreground text-sm">
+            لا توجد حركات لهذا العميل
+          </div>
+        )}
       </div>
 
       <AddCustomerTransactionDialog

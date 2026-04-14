@@ -18,7 +18,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn, formatCurrency, todayISO } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DevMockBanner } from "@/components/dev-mock-banner";
+import { cn, formatCurrency, formatQuantity, todayISO } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
 import { useCementEntries, useCustomers, useCementProducts } from "@/hooks/use-cement-daily-queries";
 import { useRealtimeCementRQ } from "@/hooks/use-cement-daily-realtime";
@@ -28,6 +31,7 @@ import { AddEntryDialog } from "./add-entry-dialog";
 import { CorrectionRequestDialog } from "./correction-request-dialog";
 import type { DailyCementWithRelations } from "@/types/database";
 import { APP_FULL_NAME } from "@/lib/constants";
+import { IS_DEV_MOCK_ENABLED, isMockId, mockCementEntries } from "@/lib/dev-mocks";
 import { Loader2 } from "lucide-react";
 
 interface DataTableProps {
@@ -40,7 +44,19 @@ export function DataTable({
   onDateChange,
 }: DataTableProps) {
   const { isAdmin, userId } = useUser();
-  const { data = [], isLoading } = useCementEntries(initialDate);
+  const { data: realData = [], isLoading } = useCementEntries(initialDate);
+  const { data: products = [] } = useCementProducts();
+  const { data: customers = [] } = useCustomers();
+
+  // Dev-only: fall back to mock data when the day has no real entries
+  // so all features (correction pair, totals, admin profit) are visible.
+  const data = useMemo(() => {
+    if (realData.length > 0) return realData;
+    if (!IS_DEV_MOCK_ENABLED) return realData;
+    return mockCementEntries(initialDate, products, customers, userId);
+  }, [realData, initialDate, products, customers, userId]);
+  const isUsingMock = data !== realData && data.length > 0;
+
   const [sorting, setSorting] = useState<SortingState>([]);
   const [customerFilter, setCustomerFilter] = useState("");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -53,6 +69,7 @@ export function DataTable({
 
   const handleRequestCorrection = useCallback(
     (entry: DailyCementWithRelations) => {
+      if (isMockId(entry.id)) return; // no-op on dev mock rows
       setCorrectionEntry(entry);
     },
     []
@@ -152,6 +169,7 @@ export function DataTable({
 
   return (
     <>
+      {isUsingMock && <DevMockBanner label="يومية تجريبية" />}
       <DataTableToolbar
         date={initialDate}
         onDateChange={onDateChange}
@@ -162,7 +180,7 @@ export function DataTable({
       />
 
       <div ref={printRef}>
-        <div className="rounded-md border">
+        <div className="hidden md:block rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
@@ -256,6 +274,223 @@ export function DataTable({
               </TableFooter>
             )}
           </Table>
+        </div>
+
+        {/* Mobile card view */}
+        <div className="md:hidden space-y-3">
+          {table.getRowModel().rows?.length ? (
+            <>
+              {table.getRowModel().rows.map((row) => {
+                const entry = row.original;
+                const totalTransport = (entry.quantity ?? 0) * (entry.transport_cost ?? 0);
+                const profitLoss =
+                  isAdmin && entry.cost_per_ton != null
+                    ? entry.price_per_ton * entry.quantity -
+                      (entry.cost_per_ton + entry.transport_cost) * entry.quantity
+                    : null;
+                return (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      "rounded-lg border p-3 space-y-2 text-sm",
+                      entry.is_corrected && "line-through opacity-50 bg-red-50",
+                      entry.correction_of_id && !entry.is_corrected && "bg-green-50",
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            #{entry.row_number}
+                          </span>
+                          <span className="font-semibold truncate">
+                            {entry.customer?.name ?? "—"}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {entry.product?.name ?? "—"} · {formatQuantity(entry.quantity)}
+                        </div>
+                      </div>
+                      {entry.is_corrected ? (
+                        <Badge variant="destructive" className="shrink-0">
+                          تم التصحيح
+                        </Badge>
+                      ) : entry.correction_of_id ? (
+                        <Badge className="bg-green-600 hover:bg-green-700 shrink-0">
+                          تصحيح
+                        </Badge>
+                      ) : null}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">الإجمالي</div>
+                        <div className="font-bold">
+                          {formatCurrency(entry.total_amount)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">المدفوع</div>
+                        <div>{formatCurrency(entry.amount_paid)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">المتبقي</div>
+                        <div
+                          className={
+                            entry.remaining_balance > 0
+                              ? "text-destructive font-medium"
+                              : "text-green-600"
+                          }
+                        >
+                          {formatCurrency(entry.remaining_balance)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">
+                          سعر الطن
+                        </div>
+                        <div>{formatCurrency(entry.price_per_ton)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">
+                          نقل الطن
+                        </div>
+                        <div>{formatCurrency(entry.transport_cost)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">
+                          إجمالي النقل
+                        </div>
+                        <div>{formatCurrency(totalTransport)}</div>
+                      </div>
+                      {isAdmin && entry.total_profit != null && (
+                        <>
+                          <div>
+                            <div className="text-[10px] text-muted-foreground">
+                              إجمالي الربح
+                            </div>
+                            <div className="text-green-600 font-semibold">
+                              {formatCurrency(entry.total_profit)}
+                            </div>
+                          </div>
+                          {profitLoss != null && (
+                            <div>
+                              <div className="text-[10px] text-muted-foreground">
+                                الربح/الخسارة
+                              </div>
+                              <div
+                                className={
+                                  profitLoss >= 0
+                                    ? "text-green-600 font-semibold"
+                                    : "text-destructive font-semibold"
+                                }
+                              >
+                                {formatCurrency(profitLoss)}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {(entry.driver_name || entry.notes) && (
+                      <div className="pt-2 border-t space-y-1">
+                        {entry.driver_name && (
+                          <div className="text-xs">
+                            <span className="text-muted-foreground">السائق: </span>
+                            {entry.driver_name}
+                          </div>
+                        )}
+                        {entry.notes && (
+                          <div className="text-xs">
+                            <span className="text-muted-foreground">ملاحظات: </span>
+                            {entry.notes}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {!entry.is_corrected && !entry.correction_of_id && (
+                      <div className="pt-2 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full text-xs"
+                          onClick={() => handleRequestCorrection(entry)}
+                        >
+                          طلب تصحيح
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Mobile totals card */}
+              <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+                <div className="font-bold text-sm">الإجمالي</div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">المبيعات</div>
+                    <div className="font-bold">
+                      {formatCurrency(totals.totalAmount)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">المدفوع</div>
+                    <div className="font-bold">
+                      {formatCurrency(totals.amountPaid)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">المتبقي</div>
+                    <div className="font-bold text-destructive">
+                      {formatCurrency(totals.remaining)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">
+                      إجمالي النقل
+                    </div>
+                    <div className="font-bold">
+                      {formatCurrency(totals.totalTransport)}
+                    </div>
+                  </div>
+                  {isAdmin && totals.totalProfit != null && (
+                    <>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">
+                          الربح
+                        </div>
+                        <div className="font-bold text-green-600">
+                          {formatCurrency(totals.totalProfit)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">
+                          الربح/الخسارة
+                        </div>
+                        <div
+                          className={cn(
+                            "font-bold",
+                            (totals.profitLoss ?? 0) >= 0
+                              ? "text-green-600"
+                              : "text-destructive",
+                          )}
+                        >
+                          {formatCurrency(totals.profitLoss)}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-lg border h-24 flex items-center justify-center text-muted-foreground text-sm">
+              لا توجد عمليات لهذا اليوم
+            </div>
+          )}
         </div>
       </div>
 

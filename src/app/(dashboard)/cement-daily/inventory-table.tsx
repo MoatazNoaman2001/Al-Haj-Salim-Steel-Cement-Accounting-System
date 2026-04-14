@@ -15,10 +15,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { INVENTORY_TABLE_HEADERS } from "@/lib/constants";
 import { formatCurrency, formatQuantity } from "@/lib/utils";
+import { DevMockBanner } from "@/components/dev-mock-banner";
 import { useUser } from "@/hooks/use-user";
-import { useDailyInventory, useCementProducts, useCementEntries } from "@/hooks/use-cement-daily-queries";
+import { useDailyInventory, useCementProducts, useCementEntries, useCustomers } from "@/hooks/use-cement-daily-queries";
 import { useUpsertInventory } from "@/hooks/use-cement-daily-mutations";
 import { useRealtimeInventoryRQ } from "@/hooks/use-cement-daily-realtime";
+import { IS_DEV_MOCK_ENABLED, mockInventory, mockCementEntries } from "@/lib/dev-mocks";
 
 interface InventoryTableProps {
   date: string;
@@ -26,12 +28,31 @@ interface InventoryTableProps {
 
 export function InventoryTable({ date }: InventoryTableProps) {
   const { isAdmin, userId } = useUser();
-  const { data: inventory = [] } = useDailyInventory(date);
+  const { data: realInventory = [] } = useDailyInventory(date);
   const { data: products = [] } = useCementProducts();
-  const { data: entries = [] } = useCementEntries(date);
+  const { data: realEntries = [] } = useCementEntries(date);
+  const { data: customers = [] } = useCustomers();
   const upsertInventory = useUpsertInventory(date);
 
   useRealtimeInventoryRQ(date);
+
+  // Dev-only: fallback to mock inventory + mock sales so the جدول البونات
+  // shows realistic previous/added/sold/cost values
+  const inventory = useMemo(() => {
+    if (realInventory.length > 0) return realInventory;
+    if (!IS_DEV_MOCK_ENABLED) return realInventory;
+    return mockInventory(date, products, userId);
+  }, [realInventory, date, products, userId]);
+
+  const entries = useMemo(() => {
+    if (realEntries.length > 0) return realEntries;
+    if (!IS_DEV_MOCK_ENABLED) return realEntries;
+    return mockCementEntries(date, products, customers, userId);
+  }, [realEntries, date, products, customers, userId]);
+
+  const isUsingMock =
+    (inventory !== realInventory && inventory.length > 0) ||
+    (entries !== realEntries && entries.length > 0);
 
   const soldByProduct = useMemo(() => {
     const map: Record<string, number> = {};
@@ -144,8 +165,9 @@ export function InventoryTable({ date }: InventoryTableProps) {
 
   return (
     <div className="mt-8">
+      {isUsingMock && <DevMockBanner label="جرد تجريبي" />}
       <h3 className="text-lg font-semibold mb-3">جدول البونات (المخزون)</h3>
-      <div className="rounded-md border">
+      <div className="hidden md:block rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -301,6 +323,188 @@ export function InventoryTable({ date }: InventoryTableProps) {
             </TableRow>
           </TableFooter>
         </Table>
+      </div>
+
+      {/* Mobile card view */}
+      <div className="md:hidden space-y-3">
+        {rows.map((row) => {
+          const edited = editedValues[row.product.id];
+          const currentAdded =
+            edited?.added != null ? Number(edited.added) : row.added;
+          const currentPrevBalance =
+            edited?.previous_balance != null
+              ? Number(edited.previous_balance)
+              : row.previous_balance;
+          const currentNetRemaining =
+            currentPrevBalance + currentAdded - row.sold;
+          const currentCostPrice =
+            edited?.cost_price != null
+              ? Number(edited.cost_price)
+              : row.cost_price;
+          const currentRemainingCost = currentNetRemaining * currentCostPrice;
+
+          return (
+            <div
+              key={row.product.id}
+              className="rounded-lg border p-3 space-y-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold">{row.product.name}</div>
+                <div className="text-right">
+                  <div className="text-[10px] text-muted-foreground">
+                    {INVENTORY_TABLE_HEADERS.netRemaining}
+                  </div>
+                  <div className="font-bold text-base">
+                    {formatQuantity(currentNetRemaining)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">
+                    {INVENTORY_TABLE_HEADERS.previousBalance}
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    className="h-8 text-left"
+                    dir="ltr"
+                    defaultValue={row.previous_balance}
+                    onChange={(e) =>
+                      handleFieldChange(
+                        row.product.id,
+                        "previous_balance",
+                        e.target.value,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">
+                    {INVENTORY_TABLE_HEADERS.added}
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    className="h-8 text-left"
+                    dir="ltr"
+                    defaultValue={row.added}
+                    onChange={(e) =>
+                      handleFieldChange(
+                        row.product.id,
+                        "added",
+                        e.target.value,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">
+                    {INVENTORY_TABLE_HEADERS.sold}
+                  </div>
+                  <div className="h-8 flex items-center font-semibold text-red-600">
+                    {formatQuantity(row.sold)}
+                  </div>
+                </div>
+                {isAdmin && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground mb-1">
+                      {INVENTORY_TABLE_HEADERS.costPrice}
+                    </div>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="h-8 text-left"
+                      dir="ltr"
+                      defaultValue={row.cost_price}
+                      onChange={(e) =>
+                        handleFieldChange(
+                          row.product.id,
+                          "cost_price",
+                          e.target.value,
+                        )
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              {isAdmin && (
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <span className="text-xs text-muted-foreground">
+                    {INVENTORY_TABLE_HEADERS.remainingCost}
+                  </span>
+                  <span className="font-semibold">
+                    {formatCurrency(currentRemainingCost)}
+                  </span>
+                </div>
+              )}
+
+              {hasEdits(row.product.id) && (
+                <Button
+                  size="sm"
+                  className="w-full gap-2"
+                  disabled={upsertInventory.isPending}
+                  onClick={() => handleSave(row.product.id)}
+                >
+                  <Save className="h-4 w-4" />
+                  حفظ
+                </Button>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Mobile totals card */}
+        <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+          <div className="font-bold text-sm">الإجمالي</div>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <div className="text-[10px] text-muted-foreground">
+                {INVENTORY_TABLE_HEADERS.previousBalance}
+              </div>
+              <div className="font-bold">
+                {formatQuantity(totals.previous_balance)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground">
+                {INVENTORY_TABLE_HEADERS.added}
+              </div>
+              <div className="font-bold">{formatQuantity(totals.added)}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground">
+                {INVENTORY_TABLE_HEADERS.sold}
+              </div>
+              <div className="font-bold text-red-600">
+                {formatQuantity(totals.sold)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground">
+                {INVENTORY_TABLE_HEADERS.netRemaining}
+              </div>
+              <div className="font-bold">
+                {formatQuantity(totals.net_remaining)}
+              </div>
+            </div>
+            {isAdmin && (
+              <div className="col-span-2">
+                <div className="text-[10px] text-muted-foreground">
+                  {INVENTORY_TABLE_HEADERS.remainingCost}
+                </div>
+                <div className="font-bold">
+                  {formatCurrency(totals.remaining_cost)}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

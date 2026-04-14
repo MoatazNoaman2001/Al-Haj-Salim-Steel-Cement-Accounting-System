@@ -4,7 +4,7 @@ export default function InventoryLoading() {
   return (
     <div className="flex flex-col h-full">
       <HeaderSkeleton />
-      <div className="flex-1 overflow-auto px-6 pb-6">
+      <div className="flex-1 overflow-auto px-4 pb-6 md:px-6">
         <ToolbarSkeleton />
         <TableSkeleton rows={10} columns={7} />
       </div>

@@ -52,24 +52,24 @@ export function ReportsClient({ cementSales, cashierEntries, deposits, banks, pr
 
   return (
     <div>
-      <div className="flex items-center justify-between py-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <div className="flex items-center gap-2">
             <Label>من</Label>
-            <Input type="date" value={fromDate} onChange={(e) => router.push(`/reports?from=${e.target.value}&to=${toDate}`)} dir="ltr" className="w-[160px]" />
+            <Input type="date" value={fromDate} onChange={(e) => router.push(`/reports?from=${e.target.value}&to=${toDate}`)} dir="ltr" className="flex-1 sm:w-40 sm:flex-none" />
           </div>
           <div className="flex items-center gap-2">
             <Label>إلى</Label>
-            <Input type="date" value={toDate} onChange={(e) => router.push(`/reports?from=${fromDate}&to=${e.target.value}`)} dir="ltr" className="w-[160px]" />
+            <Input type="date" value={toDate} onChange={(e) => router.push(`/reports?from=${fromDate}&to=${e.target.value}`)} dir="ltr" className="flex-1 sm:w-40 sm:flex-none" />
           </div>
         </div>
         <Button
           variant="outline"
           size="sm"
-          className="gap-2"
+          className="gap-2 shrink-0"
           onClick={() => exportSummaryReport(fromDate, toDate, totalSales, totalQuantity, totalProfit, totalDeposits, cashierDebit, cashierCredit, banks, productBreakdown, isAdmin)}
         >
-          <Download className="h-4 w-4" />تصدير Excel
+          <Download className="h-4 w-4" /><span className="hidden sm:inline">تصدير Excel</span>
         </Button>
       </div>
 
@@ -126,7 +126,7 @@ export function ReportsClient({ cementSales, cashierEntries, deposits, banks, pr
           <CardTitle className="text-base flex items-center gap-2"><Package className="h-4 w-4" />تفصيل المبيعات حسب الصنف</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="rounded-md border-t">
+          <div className="rounded-md border-t overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

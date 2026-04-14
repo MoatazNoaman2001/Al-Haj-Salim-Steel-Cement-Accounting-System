@@ -46,7 +46,7 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col h-full">
       <Header title="لوحة التحكم" />
-      <div className="flex-1 overflow-auto px-6 pb-6">
+      <div className="flex-1 overflow-auto px-4 pb-6 md:px-6">
         <DashboardClient
           totalSales={totalSales}
           salesCount={salesCount}
