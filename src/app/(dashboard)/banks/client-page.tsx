@@ -11,18 +11,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BANK_TABLE_HEADERS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
-import { useOfflineQuery } from "@/hooks/use-offline-query";
+import { useBanksWithTotals, type BankWithTotals } from "@/hooks/use-banks-queries";
 import { useUser } from "@/hooks/use-user";
 import { AddBankDialog } from "./add-bank-dialog";
 import { EditBankDialog } from "./edit-bank-dialog";
 import { DeleteBankDialog } from "./delete-bank-dialog";
-import type { Bank } from "@/types/database";
-
-interface BankWithTotals extends Bank {
-  totalDebit: number;
-  totalCredit: number;
-  currentBalance: number;
-}
 
 interface BanksClientProps {
   banks: BankWithTotals[];
@@ -33,33 +26,7 @@ export function BanksClient({ banks }: BanksClientProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editBank, setEditBank] = useState<BankWithTotals | null>(null);
   const [deleteBank, setDeleteBank] = useState<BankWithTotals | null>(null);
-  const { data } = useOfflineQuery<BankWithTotals[]>({
-    key: "banks-with-totals",
-    queryFn: async (supabase) => {
-      const [{ data: bankList, error: e1 }, { data: txList, error: e2 }] = await Promise.all([
-        supabase.from("banks").select("*").eq("is_active", true).order("created_at", { ascending: true }),
-        supabase.from("bank_transactions").select("bank_id, debit, credit").eq("is_corrected", false),
-      ]);
-      if (e1 || e2) return { data: null, error: e1 || e2 };
-      const totals: Record<string, { d: number; c: number }> = {};
-      (txList ?? []).forEach((tx: any) => {
-        if (!totals[tx.bank_id]) totals[tx.bank_id] = { d: 0, c: 0 };
-        totals[tx.bank_id].d += tx.debit;
-        totals[tx.bank_id].c += tx.credit;
-      });
-      return {
-        data: (bankList ?? []).map((b: any) => ({
-          ...b,
-          totalDebit: totals[b.id]?.d ?? 0,
-          totalCredit: totals[b.id]?.c ?? 0,
-          currentBalance: b.balance + (totals[b.id]?.c ?? 0) - (totals[b.id]?.d ?? 0),
-        })),
-        error: null,
-      };
-    },
-    fallback: banks,
-    realtimeTable: "bank_transactions",
-  });
+  const { data } = useBanksWithTotals(banks);
 
   const { grandDebit, grandCredit, grandBalance } = useMemo(() => ({
     grandDebit: data.reduce((sum, b) => sum + b.totalDebit, 0),

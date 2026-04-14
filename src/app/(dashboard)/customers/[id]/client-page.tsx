@@ -14,7 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { CUSTOMER_TX_HEADERS, MESSAGES } from "@/lib/constants";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
-import { useOfflineQuery } from "@/hooks/use-offline-query";
+import { useCustomer, useCustomerTransactions } from "@/hooks/use-customers-queries";
+import { useActiveBanks } from "@/hooks/use-banks-queries";
 import { safeUpdate } from "@/lib/supabase/safe-fetch";
 import { AddCustomerTransactionDialog } from "./add-transaction-dialog";
 import { CustomerCorrectionDialog } from "./correction-dialog";
@@ -41,19 +42,8 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
   const [deleteEntry, setDeleteEntry] = useState<CustomerTransactionWithCreator | null>(null);
   const [deleting, setDeleting] = useState(false);
   const router = useRouter();
-  const { data: customer } = useOfflineQuery<Customer | null>({
-    key: `customer:${customerId}`,
-    queryFn: (sb) => sb.from("customers").select("*").eq("id", customerId).single(),
-    fallback: serverCustomer,
-  });
-
-  const { data: realTxData } = useOfflineQuery<CustomerTransactionWithCreator[]>({
-    key: `customer-tx:${customerId}`,
-    queryFn: (sb) => sb.from("customer_transactions").select("*, creator:profiles!created_by(id, full_name)").eq("customer_id", customerId).order("entry_date", { ascending: true }).order("row_number", { ascending: true }),
-    fallback: transactions,
-    realtimeTable: "customer_transactions",
-    realtimeFilter: `customer_id=eq.${customerId}`,
-  });
+  const { data: customer } = useCustomer(customerId, serverCustomer);
+  const { data: realTxData } = useCustomerTransactions(customerId, transactions);
 
   const txData = useMemo(() => {
     if (realTxData.length > 0) return realTxData;
@@ -62,12 +52,7 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
   }, [realTxData, customerId, userId]);
   const isUsingMock = txData !== realTxData && txData.length > 0;
 
-  const { data: bankData } = useOfflineQuery<Bank[]>({
-    key: "banks-active",
-    queryFn: (sb) => sb.from("banks").select("*").eq("is_active", true).order("created_at", { ascending: true }),
-    fallback: banks,
-    realtimeTable: "banks",
-  });
+  const { data: bankData } = useActiveBanks(banks);
 
   if (!customer) {
     return <div className="flex items-center justify-center h-48 text-muted-foreground">جاري التحميل من الذاكرة المحلية...</div>;

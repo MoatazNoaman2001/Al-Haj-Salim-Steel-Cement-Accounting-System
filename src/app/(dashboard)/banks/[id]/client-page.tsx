@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { BANK_TABLE_HEADERS, MESSAGES } from "@/lib/constants";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
-import { useOfflineQuery } from "@/hooks/use-offline-query";
+import { useBank, useBankTransactions } from "@/hooks/use-banks-queries";
 import { safeUpdate } from "@/lib/supabase/safe-fetch";
 import { AddBankTransactionDialog } from "./add-transaction-dialog";
 import { BankCorrectionDialog } from "./correction-dialog";
@@ -64,19 +64,8 @@ export function BankDetailClient({ bankId, bank: serverBank, transactions, editH
   const [deleteEntry, setDeleteEntry] = useState<BankTransactionWithCreator | null>(null);
   const [deleting, setDeleting] = useState(false);
   const router = useRouter();
-  const { data: bank } = useOfflineQuery<Bank | null>({
-    key: `bank:${bankId}`,
-    queryFn: (sb) => sb.from("banks").select("*").eq("id", bankId).single(),
-    fallback: serverBank,
-  });
-
-  const { data: realTxData } = useOfflineQuery<BankTransactionWithCreator[]>({
-    key: `bank-tx:${bankId}`,
-    queryFn: (sb) => sb.from("bank_transactions").select("*, creator:profiles!created_by(id, full_name)").eq("bank_id", bankId).order("entry_date", { ascending: true }).order("row_number", { ascending: true }),
-    fallback: transactions,
-    realtimeTable: "bank_transactions",
-    realtimeFilter: `bank_id=eq.${bankId}`,
-  });
+  const { data: bank } = useBank(bankId, serverBank);
+  const { data: realTxData } = useBankTransactions(bankId, transactions);
 
   const txData = useMemo(() => {
     if (realTxData.length > 0) return realTxData;
