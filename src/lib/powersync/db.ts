@@ -30,19 +30,18 @@ export function getPowerSyncDB(): Promise<PowerSyncDatabase> {
       // init() opens the local SQLite file and applies the schema as views.
       await db.init();
 
-      // connect() is async and non-throwing for network errors — it reports
-      // status via db.currentStatus / db.registerListener(). We don't await
-      // it strictly because the local DB is usable before the first pull.
+      // Fire-and-forget connect. The local DB is fully usable before the
+      // first pull completes — awaiting here would delay setDb() and keep
+      // the app on a loading state while the initial sync (potentially
+      // thousands of rows) streams into IndexedDB.
       try {
         const connector = new SupabaseConnector();
-        await db.connect(connector);
+        void db.connect(connector).catch((err) => {
+          console.warn("[PowerSync] connect() failed — running in local-only mode:", err);
+        });
       } catch (err) {
-        // Missing env var or constructor throw — log but don't block the app.
-        // The DB still works locally; sync just won't happen.
-        console.warn(
-          "[PowerSync] connect() failed — running in local-only mode:",
-          err
-        );
+        // Missing env var or constructor throw — the DB still works locally.
+        console.warn("[PowerSync] connector construction failed:", err);
       }
 
       return db;

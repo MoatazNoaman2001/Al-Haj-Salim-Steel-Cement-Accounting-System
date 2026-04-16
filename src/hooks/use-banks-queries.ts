@@ -75,7 +75,7 @@ export function useBanksWithTotals(initialData: BankWithTotals[]) {
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
+  if (ps.isReady && !ps.isLoading) {
     const data: BankWithTotals[] = ps.data.map((r) => ({
       ...r,
       is_active: Boolean(r.is_active),
@@ -83,7 +83,7 @@ export function useBanksWithTotals(initialData: BankWithTotals[]) {
       totalCredit: r.total_credit,
       currentBalance: r.balance + r.total_credit - r.total_debit,
     }));
-    return { data, isLoading: ps.isLoading, error: ps.error };
+    return { data, isLoading: false, error: ps.error };
   }
   return { data: rq.data ?? initialData, isLoading: rq.isLoading, error: rq.error };
 }
@@ -111,9 +111,9 @@ export function useActiveBanks(initialData: Bank[]) {
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
+  if (ps.isReady && !ps.isLoading) {
     const data: Bank[] = ps.data.map((r) => ({ ...r, is_active: Boolean(r.is_active) }));
-    return { data, isLoading: ps.isLoading, error: ps.error };
+    return { data, isLoading: false, error: ps.error };
   }
   return { data: rq.data ?? initialData, isLoading: rq.isLoading, error: rq.error };
 }
@@ -141,12 +141,12 @@ export function useBank(bankId: string, initialData: Bank | null) {
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
+  if (ps.isReady && !ps.isLoading) {
     const row = ps.data[0];
     const data: Bank | null = row
       ? { ...row, is_active: Boolean(row.is_active) }
       : null;
-    return { data, isLoading: ps.isLoading, error: ps.error };
+    return { data, isLoading: false, error: ps.error };
   }
   return { data: rq.data ?? initialData, isLoading: rq.isLoading, error: rq.error };
 }
@@ -187,13 +187,13 @@ export function useBankTransactions(
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
+  if (ps.isReady && !ps.isLoading) {
     const data: BankTransactionWithCreator[] = ps.data.map((r) => ({
       ...r,
       is_corrected: Boolean(r.is_corrected),
       creator: { id: r.created_by, full_name: r.creator_name ?? "" },
     }));
-    return { data, isLoading: ps.isLoading, error: ps.error };
+    return { data, isLoading: false, error: ps.error };
   }
   return { data: rq.data ?? initialData, isLoading: rq.isLoading, error: rq.error };
 }

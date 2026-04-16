@@ -77,10 +77,10 @@ export function useCementEntries(date: string) {
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
+  if (ps.isReady && !ps.isLoading) {
     return {
       data: shapeCementEntries(ps.data),
-      isLoading: ps.isLoading,
+      isLoading: false,
       error: ps.error,
     };
   }
@@ -111,8 +111,8 @@ export function useCustomers() {
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
-    return { data: ps.data, isLoading: ps.isLoading, error: ps.error };
+  if (ps.isReady && !ps.isLoading) {
+    return { data: ps.data, isLoading: false, error: ps.error };
   }
   return rq;
 }
@@ -144,8 +144,8 @@ export function useCementProducts() {
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
-    return { data: ps.data, isLoading: ps.isLoading, error: ps.error };
+  if (ps.isReady && !ps.isLoading) {
+    return { data: ps.data, isLoading: false, error: ps.error };
   }
   return rq;
 }
@@ -182,13 +182,13 @@ export function useDailyInventory(date: string) {
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
+  if (ps.isReady && !ps.isLoading) {
     return {
       data: ps.data.map((r) => ({
         ...r,
         product: { id: r.product_id, name: r.product_name ?? "" },
       })),
-      isLoading: ps.isLoading,
+      isLoading: false,
       error: ps.error,
     };
   }
@@ -229,13 +229,13 @@ export function useDailyDeposits(date: string) {
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
+  if (ps.isReady && !ps.isLoading) {
     return {
       data: ps.data.map((r) => ({
         ...r,
         creator: { id: r.created_by, full_name: r.creator_name ?? "" },
       })),
-      isLoading: ps.isLoading,
+      isLoading: false,
       error: ps.error,
     };
   }
@@ -265,10 +265,10 @@ export function useDailyCashBalance(date: string) {
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
+  if (ps.isReady && !ps.isLoading) {
     return {
       data: (ps.data[0] ?? null) as DailyCashBalance | null,
-      isLoading: ps.isLoading,
+      isLoading: false,
       error: ps.error,
     };
   }

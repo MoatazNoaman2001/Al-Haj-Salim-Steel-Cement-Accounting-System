@@ -52,12 +52,12 @@ export function useCustomerBalances(initialData: CustomerWithBalance[]) {
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
+  if (ps.isReady && !ps.isLoading) {
     const data: CustomerWithBalance[] = ps.data.map((r) => ({
       ...r,
       is_active: Boolean(r.is_active),
     }));
-    return { data, isLoading: ps.isLoading, error: ps.error };
+    return { data, isLoading: false, error: ps.error };
   }
   return { data: rq.data ?? initialData, isLoading: rq.isLoading, error: rq.error };
 }
@@ -85,12 +85,12 @@ export function useCustomer(customerId: string, initialData: Customer | null) {
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
+  if (ps.isReady && !ps.isLoading) {
     const row = ps.data[0];
     const data: Customer | null = row
       ? { ...row, is_active: Boolean(row.is_active) }
       : null;
-    return { data, isLoading: ps.isLoading, error: ps.error };
+    return { data, isLoading: false, error: ps.error };
   }
   return { data: rq.data ?? initialData, isLoading: rq.isLoading, error: rq.error };
 }
@@ -131,13 +131,13 @@ export function useCustomerTransactions(
     enabled: !ps.isReady,
   });
 
-  if (ps.isReady) {
+  if (ps.isReady && !ps.isLoading) {
     const data: CustomerTransactionWithCreator[] = ps.data.map((r) => ({
       ...r,
       is_corrected: Boolean(r.is_corrected),
       creator: { id: r.created_by, full_name: r.creator_name ?? "" },
     }));
-    return { data, isLoading: ps.isLoading, error: ps.error };
+    return { data, isLoading: false, error: ps.error };
   }
   return { data: rq.data ?? initialData, isLoading: rq.isLoading, error: rq.error };
 }
