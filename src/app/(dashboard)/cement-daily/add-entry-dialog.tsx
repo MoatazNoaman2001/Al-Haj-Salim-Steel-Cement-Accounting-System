@@ -35,6 +35,7 @@ interface AddEntryDialogProps {
   date: string;
   userId: string;
   isAdmin: boolean;
+  category?: string;
 }
 
 export function AddEntryDialog({
@@ -43,9 +44,10 @@ export function AddEntryDialog({
   date,
   userId,
   isAdmin,
+  category = "cement",
 }: AddEntryDialogProps) {
   const { data: customers = [] } = useCustomers();
-  const { data: products = [] } = useCementProducts();
+  const { data: products = [] } = useCementProducts(category);
   const addEntry = useAddCementEntry(date);
 
   const form = useForm<AddEntryFormValues>({

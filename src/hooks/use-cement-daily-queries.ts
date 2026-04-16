@@ -37,7 +37,7 @@ function shapeCementEntries(rows: CementEntryRow[]): DailyCementWithRelations[] 
   }));
 }
 
-export function useCementEntries(date: string) {
+export function useCementEntries(date: string, category: string = "cement") {
   const ps = usePSQuery<CementEntryRow>(
     `SELECT
        c.*,
@@ -46,16 +46,16 @@ export function useCementEntries(date: string) {
        pr.full_name AS creator_name
      FROM daily_cement c
      LEFT JOIN customers cu ON cu.id = c.customer_id
-     LEFT JOIN products  p  ON p.id  = c.product_id
+     INNER JOIN products p  ON p.id  = c.product_id AND p.category = ?
      LEFT JOIN profiles  pr ON pr.id = c.created_by
      WHERE c.entry_date = ?
      ORDER BY c.row_number ASC`,
-    [date],
+    [category, date],
     ["daily_cement", "customers", "products", "profiles"],
   );
 
   const rq = useQuery({
-    queryKey: cementDailyKeys.entries(date),
+    queryKey: cementDailyKeys.entries(date, category),
     queryFn: async () => {
       const supabase = createClient();
       const { data, error } = await supabase
@@ -64,11 +64,12 @@ export function useCementEntries(date: string) {
           `
           *,
           customer:customers!customer_id(id, name),
-          product:products!product_id(id, name),
+          product:products!inner(id, name, category),
           creator:profiles!created_by(id, full_name)
         `,
         )
         .eq("entry_date", date)
+        .eq("product.category", category)
         .order("row_number", { ascending: true });
 
       if (error) throw error;
@@ -117,23 +118,23 @@ export function useCustomers() {
   return rq;
 }
 
-export function useCementProducts() {
+export function useCementProducts(category: string = "cement") {
   const ps = usePSQuery<Pick<Product, "id" | "name">>(
     `SELECT id, name FROM products
-     WHERE category = 'cement' AND is_active = 1
+     WHERE category = ? AND is_active = 1
      ORDER BY name`,
-    [],
+    [category],
     ["products"],
   );
 
   const rq = useQuery({
-    queryKey: cementDailyKeys.products("cement"),
+    queryKey: cementDailyKeys.products(category),
     queryFn: async () => {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("products")
         .select("id, name")
-        .eq("category", "cement")
+        .eq("category", category)
         .eq("is_active", true)
         .order("name");
 
@@ -152,18 +153,18 @@ export function useCementProducts() {
 
 type InventoryRow = DailyInventoryWithProduct & { product_name: string | null };
 
-export function useDailyInventory(date: string) {
+export function useDailyInventory(date: string, category: string = "cement") {
   const ps = usePSQuery<InventoryRow>(
     `SELECT i.*, p.name AS product_name
      FROM daily_inventory i
-     LEFT JOIN products p ON p.id = i.product_id
+     INNER JOIN products p ON p.id = i.product_id AND p.category = ?
      WHERE i.entry_date = ?`,
-    [date],
+    [category, date],
     ["daily_inventory", "products"],
   );
 
   const rq = useQuery({
-    queryKey: cementDailyKeys.inventory(date),
+    queryKey: cementDailyKeys.inventory(date, category),
     queryFn: async () => {
       const supabase = createClient();
       const { data, error } = await supabase
@@ -171,10 +172,11 @@ export function useDailyInventory(date: string) {
         .select(
           `
           *,
-          product:products!product_id(id, name)
+          product:products!inner(id, name, category)
         `,
         )
-        .eq("entry_date", date);
+        .eq("entry_date", date)
+        .eq("product.category", category);
 
       if (error) throw error;
       return data as DailyInventoryWithProduct[];

@@ -37,15 +37,17 @@ import { Loader2 } from "lucide-react";
 interface DataTableProps {
   initialDate: string;
   onDateChange: (date: string) => void;
+  category?: string;
 }
 
 export function DataTable({
   initialDate,
   onDateChange,
+  category = "cement",
 }: DataTableProps) {
   const { isAdmin, userId } = useUser();
-  const { data: realData = [], isLoading } = useCementEntries(initialDate);
-  const { data: products = [] } = useCementProducts();
+  const { data: realData = [], isLoading } = useCementEntries(initialDate, category);
+  const { data: products = [] } = useCementProducts(category);
   const { data: customers = [] } = useCustomers();
 
   // Dev-only: fall back to mock data when the day has no real entries
@@ -128,12 +130,13 @@ export function DataTable({
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
+    const pageTitle = category === "steel" ? "يومية الحديد" : "يومية الاسمنت";
     printWindow.document.write(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
         <meta charset="UTF-8">
-        <title>يومية الاسمنت - ${initialDate}</title>
+        <title>${pageTitle} - ${initialDate}</title>
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
           body { font-family: 'Cairo', sans-serif; padding: 20px; }
@@ -150,7 +153,7 @@ export function DataTable({
       </head>
       <body>
         <h1>${APP_FULL_NAME}</h1>
-        <h2>يومية الاسمنت - ${initialDate}</h2>
+        <h2>${pageTitle} - ${initialDate}</h2>
         ${printContent.innerHTML}
       </body>
       </html>
@@ -500,6 +503,7 @@ export function DataTable({
         date={initialDate}
         userId={userId}
         isAdmin={isAdmin}
+        category={category}
       />
 
       <CorrectionRequestDialog

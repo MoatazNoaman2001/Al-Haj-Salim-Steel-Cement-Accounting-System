@@ -24,13 +24,14 @@ import { IS_DEV_MOCK_ENABLED, mockInventory, mockCementEntries } from "@/lib/dev
 
 interface InventoryTableProps {
   date: string;
+  category?: string;
 }
 
-export function InventoryTable({ date }: InventoryTableProps) {
+export function InventoryTable({ date, category = "cement" }: InventoryTableProps) {
   const { isAdmin, userId } = useUser();
-  const { data: realInventory = [] } = useDailyInventory(date);
-  const { data: products = [] } = useCementProducts();
-  const { data: realEntries = [] } = useCementEntries(date);
+  const { data: realInventory = [] } = useDailyInventory(date, category);
+  const { data: products = [] } = useCementProducts(category);
+  const { data: realEntries = [] } = useCementEntries(date, category);
   const { data: customers = [] } = useCustomers();
   const upsertInventory = useUpsertInventory(date);
 

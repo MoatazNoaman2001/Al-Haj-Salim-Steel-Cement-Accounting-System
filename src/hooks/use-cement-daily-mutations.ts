@@ -68,7 +68,7 @@ export function useAddCementEntry(date: string) {
     onSuccess: () => {
       toast.success(MESSAGES.entryAdded);
       if (!db) {
-        queryClient.invalidateQueries({ queryKey: cementDailyKeys.entries(date) });
+        queryClient.invalidateQueries({ queryKey: ["cement-daily", "entries", date] });
         queryClient.invalidateQueries({ queryKey: cementDailyKeys.customers() });
       }
     },
@@ -213,7 +213,7 @@ export function useUpsertInventory(date: string) {
     onSuccess: () => {
       toast.success(MESSAGES.inventoryUpdated);
       if (!db) {
-        queryClient.invalidateQueries({ queryKey: cementDailyKeys.inventory(date) });
+        queryClient.invalidateQueries({ queryKey: ["cement-daily", "inventory", date] });
       }
     },
     onError: () => {
