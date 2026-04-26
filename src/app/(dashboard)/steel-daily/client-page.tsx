@@ -18,7 +18,7 @@ export function SteelDailyClient({ initialDate }: SteelDailyClientProps) {
   return (
     <>
       <DataTable initialDate={initialDate} onDateChange={handleDateChange} />
-      <InventoryTable date={initialDate} />
+      <InventoryTable date={initialDate} category="steel" />
     </>
   );
 }

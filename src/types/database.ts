@@ -81,7 +81,6 @@ export interface DailyCementInsert {
   created_by: string;
 }
 
-// Daily Inventory / جدول البونات (Stock Tracking per Product)
 export interface DailyInventory {
   id: string;
   entry_date: string;
@@ -248,6 +247,96 @@ export interface CustomerTransaction {
 }
 
 export interface CustomerTransactionWithCreator extends CustomerTransaction {
+  creator: Pick<Profile, "id" | "full_name">;
+}
+
+// Customer Reservations (محجوز العملاء)
+// A reservation is a money-balance ledger between a customer (account holder)
+// and a related "partner customer" (e.g. family member / linked client).
+// credit  → reservation deposit (increases balance)
+// debit   → withdrawal/delivery (decreases balance)
+export interface CustomerReservation {
+  id: string;
+  customer_id: string;
+  partner_customer_id: string;
+  product_id: string | null;
+  entry_date: string;
+  description: string | null;
+  credit: number;
+  debit: number;
+  notes: string | null;
+  source_type: string | null;
+  source_id: string | null;
+  created_by: string;
+  created_at: string;
+  row_number: number;
+  is_corrected: boolean;
+  correction_of_id: string | null;
+  corrected_by_entry_id: string | null;
+  correction_reason: string | null;
+}
+
+export interface CustomerReservationWithRelations extends CustomerReservation {
+  partner_customer: Pick<Customer, "id" | "name">;
+  product: Pick<Product, "id" | "name"> | null;
+  creator: Pick<Profile, "id" | "full_name">;
+}
+
+export interface CustomerReservationInsert {
+  customer_id: string;
+  partner_customer_id: string;
+  product_id?: string | null;
+  entry_date: string;
+  description?: string | null;
+  credit: number;
+  debit: number;
+  notes?: string | null;
+  created_by: string;
+}
+
+// Suppliers (الموردين)
+// Mirrors Customer/CustomerTransaction but with INVERTED balance sign:
+//   balance = credit - debit
+//   negative → we still owe the supplier
+//   positive → supplier holds our credit
+export interface Supplier {
+  id: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface SupplierWithBalance extends Supplier {
+  total_debit: number;
+  total_credit: number;
+  balance: number;
+}
+
+export interface SupplierTransaction {
+  id: string;
+  supplier_id: string;
+  entry_date: string;
+  description: string;
+  quantity: number | null;
+  price: number | null;
+  debit: number;
+  credit: number;
+  notes: string | null;
+  source_type: string | null;
+  source_id: string | null;
+  created_by: string;
+  created_at: string;
+  row_number: number;
+  is_corrected: boolean;
+  correction_of_id: string | null;
+  corrected_by_entry_id: string | null;
+  correction_reason: string | null;
+}
+
+export interface SupplierTransactionWithCreator extends SupplierTransaction {
   creator: Pick<Profile, "id" | "full_name">;
 }
 

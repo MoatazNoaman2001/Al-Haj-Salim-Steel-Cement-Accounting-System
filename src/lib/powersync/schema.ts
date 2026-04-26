@@ -242,6 +242,75 @@ const customer_transactions = new Table(
   }
 );
 
+const customer_reservations = new Table(
+  {
+    customer_id: column.text,
+    partner_customer_id: column.text,
+    product_id: column.text,
+    entry_date: column.text,
+    description: column.text,
+    credit: column.real,
+    debit: column.real,
+    notes: column.text,
+    source_type: column.text,
+    source_id: column.text,
+    created_by: column.text,
+    created_at: column.text,
+    row_number: column.integer,
+    is_corrected: column.integer,
+    correction_of_id: column.text,
+    corrected_by_entry_id: column.text,
+    correction_reason: column.text,
+  },
+  {
+    indexes: {
+      by_customer: ["customer_id", "entry_date"],
+      by_partner: ["partner_customer_id"],
+      by_date: ["entry_date"],
+    },
+  }
+);
+
+const suppliers = new Table(
+  {
+    name: column.text,
+    phone: column.text,
+    address: column.text,
+    notes: column.text,
+    is_active: column.integer,
+    created_at: column.text,
+  },
+  { indexes: { by_active: ["is_active"] } }
+);
+
+const supplier_transactions = new Table(
+  {
+    supplier_id: column.text,
+    entry_date: column.text,
+    description: column.text,
+    quantity: column.real,
+    price: column.real,
+    debit: column.real,
+    credit: column.real,
+    notes: column.text,
+    source_type: column.text,
+    source_id: column.text,
+    created_by: column.text,
+    created_at: column.text,
+    row_number: column.integer,
+    is_corrected: column.integer,
+    correction_of_id: column.text,
+    corrected_by_entry_id: column.text,
+    correction_reason: column.text,
+  },
+  {
+    indexes: {
+      by_supplier: ["supplier_id", "entry_date"],
+      by_date: ["entry_date"],
+    },
+  }
+);
+
 export const AppSchema = new Schema({
   profiles,
   customers,
@@ -256,6 +325,9 @@ export const AppSchema = new Schema({
   banks,
   bank_transactions,
   customer_transactions,
+  customer_reservations,
+  suppliers,
+  supplier_transactions,
 });
 
 export type Database = (typeof AppSchema)["types"];

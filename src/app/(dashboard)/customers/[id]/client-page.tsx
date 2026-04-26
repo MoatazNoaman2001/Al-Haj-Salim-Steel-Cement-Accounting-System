@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CUSTOMER_TX_HEADERS, MESSAGES } from "@/lib/constants";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
@@ -19,6 +20,7 @@ import { useActiveBanks } from "@/hooks/use-banks-queries";
 import { safeUpdate } from "@/lib/supabase/safe-fetch";
 import { AddCustomerTransactionDialog } from "./add-transaction-dialog";
 import { CustomerCorrectionDialog } from "./correction-dialog";
+import { ReservationsTable } from "./reservations-table";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -26,16 +28,22 @@ import {
 import { exportCustomerReport } from "@/lib/export-excel";
 import { DevMockBanner } from "@/components/dev-mock-banner";
 import { IS_DEV_MOCK_ENABLED, isMockId, mockCustomerTransactions } from "@/lib/dev-mocks";
-import type { Customer, CustomerTransactionWithCreator, Bank } from "@/types/database";
+import type {
+  Customer,
+  CustomerTransactionWithCreator,
+  CustomerReservationWithRelations,
+  Bank,
+} from "@/types/database";
 
 interface CustomerDetailClientProps {
   customerId: string;
   customer: Customer | null;
   transactions: CustomerTransactionWithCreator[];
+  reservations: CustomerReservationWithRelations[];
   banks: Bank[];
 }
 
-export function CustomerDetailClient({ customerId, customer: serverCustomer, transactions, banks }: CustomerDetailClientProps) {
+export function CustomerDetailClient({ customerId, customer: serverCustomer, transactions, reservations, banks }: CustomerDetailClientProps) {
   const { userId, isAdmin } = useUser();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [correctionEntry, setCorrectionEntry] = useState<CustomerTransactionWithCreator | null>(null);
@@ -53,10 +61,6 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
   const isUsingMock = txData !== realTxData && txData.length > 0;
 
   const { data: bankData } = useActiveBanks(banks);
-
-  if (!customer) {
-    return <div className="flex items-center justify-center h-48 text-muted-foreground">جاري التحميل من الذاكرة المحلية...</div>;
-  }
 
   // Build bank name lookup
   const bankNameMap = useMemo(() => {
@@ -91,6 +95,10 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
     router.refresh();
   }
 
+  if (!customer) {
+    return <div className="flex items-center justify-center h-48 text-muted-foreground">جاري التحميل من الذاكرة المحلية...</div>;
+  }
+
   return (
     <div>
       {isUsingMock && <DevMockBanner label="كشف حساب تجريبي" />}
@@ -104,6 +112,16 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
             {customer.phone && <span className="text-sm text-muted-foreground" dir="ltr">{customer.phone}</span>}
           </div>
         </div>
+      </div>
+
+      <Tabs defaultValue="statement" dir="rtl">
+        <TabsList className="mb-4">
+          <TabsTrigger value="statement">كشف الحساب</TabsTrigger>
+          <TabsTrigger value="reservations">محجوز العملاء</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="statement">
+      <div className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-end">
         <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
@@ -396,6 +414,16 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
           </div>
         )}
       </div>
+        </TabsContent>
+
+        <TabsContent value="reservations">
+          <ReservationsTable
+            customerId={customer.id}
+            customerName={customer.name}
+            initialReservations={reservations}
+          />
+        </TabsContent>
+      </Tabs>
 
       <AddCustomerTransactionDialog
         open={addDialogOpen}
