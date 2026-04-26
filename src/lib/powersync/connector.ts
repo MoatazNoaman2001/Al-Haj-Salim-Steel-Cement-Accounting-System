@@ -59,6 +59,8 @@ const SERVER_MANAGED_COLUMNS: Record<string, readonly string[]> = {
   daily_deposits: ["row_number"],
   bank_transactions: ["row_number"],
   customer_transactions: ["row_number"],
+  customer_reservations: ["row_number"],
+  supplier_transactions: ["row_number"],
 };
 
 function stripServerManaged(

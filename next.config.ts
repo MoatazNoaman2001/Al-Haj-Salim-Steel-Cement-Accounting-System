@@ -7,7 +7,7 @@ const withSerwist = withSerwistInit({
 });
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  distDir: "build",
 };
 
 export default withSerwist(nextConfig);

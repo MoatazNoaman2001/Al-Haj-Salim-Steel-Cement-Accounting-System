@@ -12,6 +12,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
 
   let customer = null;
   let transactions: any[] = [];
+  let reservations: any[] = [];
   let banks: any[] = [];
 
   try {
@@ -19,10 +20,21 @@ export default async function CustomerDetailPage({ params }: PageProps) {
       .from("customers").select("*").eq("id", id).single();
     customer = data;
 
-    const [txResult, bankResult] = await Promise.all([
+    const [txResult, resResult, bankResult] = await Promise.all([
       supabase
         .from("customer_transactions")
         .select("*, creator:profiles!created_by(id, full_name)")
+        .eq("customer_id", id)
+        .order("entry_date", { ascending: true })
+        .order("row_number", { ascending: true }),
+      supabase
+        .from("customer_reservations")
+        .select(
+          `*,
+           partner_customer:customers!partner_customer_id(id, name),
+           product:products!product_id(id, name),
+           creator:profiles!created_by(id, full_name)`,
+        )
         .eq("customer_id", id)
         .order("entry_date", { ascending: true })
         .order("row_number", { ascending: true }),
@@ -33,6 +45,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
         .order("created_at", { ascending: true }),
     ]);
     transactions = txResult.data ?? [];
+    reservations = resResult.data ?? [];
     banks = bankResult.data ?? [];
   } catch {
     // Offline
@@ -46,6 +59,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           customerId={id}
           customer={customer}
           transactions={transactions}
+          reservations={reservations}
           banks={banks}
         />
       </div>

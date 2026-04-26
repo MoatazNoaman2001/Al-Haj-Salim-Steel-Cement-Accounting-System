@@ -57,6 +57,103 @@ export function exportCustomerReport(
 }
 
 // =====================================================
+// Supplier Account Statement (كشف حساب المورد)
+// =====================================================
+// Same shape as the customer report but the running balance is already
+// computed with the supplier convention (credit - debit). The export just
+// echoes the values rendered on the page.
+
+interface SupplierReportRow {
+  entry_date: string;
+  description: string;
+  quantity: number | null;
+  price: number | null;
+  debit: number;
+  credit: number;
+  runningBalance: number;
+}
+
+export function exportSupplierReport(
+  supplierName: string,
+  rows: SupplierReportRow[],
+  totalDebit: number,
+  totalCredit: number,
+  finalBalance: number
+) {
+  const wsData: (string | number | null)[][] = [
+    ["اسم المورد", supplierName, null, null, null, null, null],
+    ["التاريخ", "التفاصيل", "العدد", "السعر", "عليه", "له", "الرصيد"],
+    [null, null, null, null, null, null, 0],
+  ];
+
+  rows.forEach((row) => {
+    wsData.push([
+      row.entry_date, row.description, row.quantity, row.price,
+      row.debit || null, row.credit || null, row.runningBalance,
+    ]);
+  });
+
+  wsData.push([null, "الرصيد الحالى", null, null, totalDebit, totalCredit, finalBalance]);
+
+  createWorkbook("كشف حساب المورد", wsData, [14, 22, 10, 12, 14, 14, 14], `كشف حساب مورد - ${supplierName}`);
+}
+
+// =====================================================
+// Customer Reservations Pivot Report (محجوز العملاء)
+// =====================================================
+
+interface ReservationPartnerColumn {
+  id: string;
+  name: string;
+}
+
+interface ReservationPivotRow {
+  entry_date: string;
+  description: string;
+  partnerAmounts: Record<string, { credit: number; debit: number }>;
+  runningBalance: number;
+}
+
+export function exportCustomerReservationReport(
+  customerName: string,
+  partners: ReservationPartnerColumn[],
+  rows: ReservationPivotRow[],
+  totalCredit: number,
+  totalDebit: number,
+  finalBalance: number
+) {
+  const headers = ["التاريخ", "التفاصيل", ...partners.map((p) => p.name), "الرصيد"];
+  const wsData: (string | number | null)[][] = [
+    ["محجوز العملاء", customerName, ...new Array(headers.length - 2).fill(null)],
+    headers,
+  ];
+
+  rows.forEach((row) => {
+    const partnerCells = partners.map((p) => {
+      const v = row.partnerAmounts[p.id];
+      if (!v) return null;
+      if (v.credit > 0) return v.credit;
+      if (v.debit > 0) return -v.debit;
+      return null;
+    });
+    wsData.push([row.entry_date, row.description, ...partnerCells, row.runningBalance]);
+  });
+
+  const totalsCells = partners.map((p) => {
+    const credit = rows.reduce((s, r) => s + (r.partnerAmounts[p.id]?.credit ?? 0), 0);
+    const debit  = rows.reduce((s, r) => s + (r.partnerAmounts[p.id]?.debit ?? 0), 0);
+    const net = credit - debit;
+    return net !== 0 ? net : null;
+  });
+  wsData.push([null, "الإجمالي", ...totalsCells, finalBalance]);
+  wsData.push([null, "إجمالي الحجوزات", totalCredit, ...new Array(partners.length).fill(null), null]);
+  wsData.push([null, "إجمالي السحوبات", totalDebit, ...new Array(partners.length).fill(null), null]);
+
+  const colWidths = [14, 22, ...partners.map(() => 14), 14];
+  createWorkbook("محجوز العملاء", wsData, colWidths, `محجوز العملاء - ${customerName}`);
+}
+
+// =====================================================
 // Bank Account Statement (كشف حساب البنك)
 // =====================================================
 

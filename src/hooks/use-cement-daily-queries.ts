@@ -117,23 +117,23 @@ export function useCustomers() {
   return rq;
 }
 
-export function useCementProducts() {
+export function useCementProducts(category: "cement" | "steel" = "cement") {
   const ps = usePSQuery<Pick<Product, "id" | "name">>(
     `SELECT id, name FROM products
-     WHERE category = 'cement' AND is_active = 1
+     WHERE category = ? AND is_active = 1
      ORDER BY name`,
-    [],
+    [category],
     ["products"],
   );
 
   const rq = useQuery({
-    queryKey: cementDailyKeys.products("cement"),
+    queryKey: cementDailyKeys.products(category),
     queryFn: async () => {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("products")
         .select("id, name")
-        .eq("category", "cement")
+        .eq("category", category)
         .eq("is_active", true)
         .order("name");
 

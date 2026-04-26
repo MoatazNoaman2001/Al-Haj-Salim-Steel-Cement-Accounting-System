@@ -26,6 +26,8 @@ export const NAV_ITEMS = [
   { href: "/inventory", label: "الجرد", icon: "Package" as const, active: true },
   { href: "/banks", label: "البنوك", icon: "Landmark" as const, active: true },
   { href: "/customers", label: "العملاء", icon: "Users" as const, active: true },
+  { href: "/suppliers", label: "الموردين", icon: "Truck" as const, active: true },
+  { href: "/reservations", label: "الحجوزات", icon: "CalendarCheck" as const, active: true },
   { href: "/reports", label: "التقارير", icon: "BarChart3" as const, active: true },
 ];
 
@@ -114,6 +116,13 @@ export const BANK_TABLE_HEADERS = {
   credit: "دائن",
   balance: "الرصيد",
   createdBy: "بواسطة",
+};
+
+export const RESERVATION_HEADERS = {
+  rowNum: "م",
+  date: "التاريخ",
+  description: "التفاصيل",
+  balance: "الرصيد",
 };
 
 export const CUSTOMER_TX_HEADERS = {

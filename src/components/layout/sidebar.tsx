@@ -12,6 +12,8 @@ import {
   Package,
   Landmark,
   Users,
+  Truck,
+  CalendarCheck,
   BarChart3,
   LogOut,
   Menu,
@@ -40,6 +42,8 @@ const iconMap = {
   Package,
   Landmark,
   Users,
+  Truck,
+  CalendarCheck,
   BarChart3,
 } as const;
 
@@ -66,7 +70,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <nav className="space-y-1">
           {NAV_ITEMS.map((item) => {
             if (item.adminOnly && !isAdmin) return null;
-            const Icon = iconMap[item.icon];
+            const Icon = iconMap[item.icon as keyof typeof iconMap];
             const isActive = pathname.startsWith(item.href) && item.href !== "#";
 
             return (
@@ -83,7 +87,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                       : "text-muted-foreground cursor-not-allowed opacity-50"
                 )}
               >
-                <Icon className="h-4 w-4" />
                 <span>{item.label}</span>
                 {!item.active && (
                   <Badge variant="outline" className="ms-auto text-[10px] px-1.5">
