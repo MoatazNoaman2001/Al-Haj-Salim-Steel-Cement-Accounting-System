@@ -11,7 +11,12 @@ import { useUser } from "@/hooks/use-user";
 import { useActiveCustomers, useCustomerReservations } from "@/hooks/use-customers-queries";
 import { useCementProducts } from "@/hooks/use-cement-daily-queries";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
-import { exportCustomerReservationReport } from "@/lib/export-excel";
+import { exportCustomerReservationReportPro } from "@/lib/export-excel";
+import {
+  ExportOptionsDialog,
+  type ExportColumnOption,
+  type ExportOptions,
+} from "@/components/export-options-dialog";
 import { AddReservationDialog } from "./add-reservation-dialog";
 import type { CustomerReservationWithRelations } from "@/types/database";
 
@@ -37,6 +42,7 @@ export function ReservationsTable({
 }: ReservationsTableProps) {
   const { userId } = useUser();
   const [addOpen, setAddOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const { data: reservations } = useCustomerReservations(customerId, initialReservations);
   const { data: partners = [] } = useActiveCustomers();
@@ -92,6 +98,30 @@ export function ReservationsTable({
     return "";
   }
 
+  const exportColumns: ExportColumnOption[] = useMemo(() => {
+    const fixed: ExportColumnOption[] = [
+      { key: "row", label: "م", default: true },
+      { key: "date", label: "التاريخ", default: true, locked: true },
+      { key: "description", label: "التفاصيل", default: true },
+      { key: "balance", label: "الرصيد", default: true, locked: true },
+    ];
+    const partnerCols: ExportColumnOption[] = partnerColumns.map((p) => ({
+      key: `partner:${p.id}`,
+      label: p.name,
+      default: true,
+    }));
+    return [...fixed, ...partnerCols];
+  }, [partnerColumns]);
+
+  const partnerNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of partnerColumns) map[p.id] = p.name;
+    return map;
+  }, [partnerColumns]);
+
+  const earliestDate = reservations[0]?.entry_date ?? "";
+  const latestDate = reservations[reservations.length - 1]?.entry_date ?? "";
+
   return (
     <div>
       <div className="flex flex-col gap-3 py-2 sm:flex-row sm:items-center sm:justify-between">
@@ -101,17 +131,8 @@ export function ReservationsTable({
             variant="outline"
             size="sm"
             className="gap-2"
-            onClick={() =>
-              exportCustomerReservationReport(
-                customerName,
-                partnerColumns,
-                rows,
-                totalCredit,
-                totalDebit,
-                finalBalance,
-              )
-            }
-            disabled={rows.length === 0}
+            onClick={() => setExportOpen(true)}
+            disabled={reservations.length === 0}
           >
             <Download className="h-4 w-4" /><span className="hidden sm:inline">تصدير Excel</span>
           </Button>
@@ -238,6 +259,37 @@ export function ReservationsTable({
         userId={userId}
         partners={partners}
         products={products}
+      />
+
+      <ExportOptionsDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        title="تصدير محجوز العملاء"
+        description="اختر النطاق الزمني، الشركاء، والأعمدة المعروضة."
+        defaultFromDate={earliestDate}
+        defaultToDate={latestDate}
+        columns={exportColumns}
+        onExport={(opts: ExportOptions) => {
+          const partnerIds = Object.keys(opts.columns)
+            .filter((k) => k.startsWith("partner:") && opts.columns[k])
+            .map((k) => k.slice("partner:".length));
+          exportCustomerReservationReportPro({
+            customerName,
+            reservations: reservations.map((r) => ({
+              entry_date: r.entry_date,
+              description: r.description ?? r.product?.name ?? "",
+              partner_customer_id: r.partner_customer_id,
+              partner_name: r.partner_customer?.name ?? "—",
+              credit: r.credit,
+              debit: r.debit,
+              is_corrected: r.is_corrected,
+              notes: r.notes,
+            })),
+            partnerIds,
+            partnerNameById,
+            options: opts,
+          });
+        }}
       />
     </div>
   );

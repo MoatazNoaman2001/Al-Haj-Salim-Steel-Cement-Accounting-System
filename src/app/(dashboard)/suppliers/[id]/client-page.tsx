@@ -14,9 +14,27 @@ import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
 import { useSupplier, useSupplierTransactions } from "@/hooks/use-suppliers-queries";
 import { useActiveBanks } from "@/hooks/use-banks-queries";
-import { exportSupplierReport } from "@/lib/export-excel";
+import { exportSupplierReportPro } from "@/lib/export-excel";
+import {
+  ExportOptionsDialog,
+  type ExportColumnOption,
+  type ExportOptions,
+} from "@/components/export-options-dialog";
 import { AddSupplierTransactionDialog } from "./add-transaction-dialog";
 import type { Supplier, SupplierTransactionWithCreator, Bank } from "@/types/database";
+
+const SUPPLIER_EXPORT_COLUMNS: ExportColumnOption[] = [
+  { key: "row", label: "م", default: true },
+  { key: "date", label: "التاريخ", default: true, locked: true },
+  { key: "description", label: "البيان", default: true },
+  { key: "quantity", label: "العدد", default: true },
+  { key: "price", label: "السعر", default: true },
+  { key: "debit", label: "عليه (مدين)", default: true },
+  { key: "credit", label: "له (دائن)", default: true },
+  { key: "source", label: "مصدر الدفع", default: true },
+  { key: "balance", label: "الرصيد", default: true, locked: true },
+  { key: "notes", label: "ملاحظات", default: false },
+];
 
 interface SupplierDetailClientProps {
   supplierId: string;
@@ -28,6 +46,7 @@ interface SupplierDetailClientProps {
 export function SupplierDetailClient({ supplierId, supplier: serverSupplier, transactions, banks }: SupplierDetailClientProps) {
   const { userId } = useUser();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   const { data: supplier } = useSupplier(supplierId, serverSupplier);
   const { data: txData } = useSupplierTransactions(supplierId, transactions);
@@ -82,7 +101,8 @@ export function SupplierDetailClient({ supplierId, supplier: serverSupplier, tra
             variant="outline"
             size="sm"
             className="gap-2"
-            onClick={() => exportSupplierReport(supplier.name, rows, totalDebit, totalCredit, finalBalance)}
+            onClick={() => setExportDialogOpen(true)}
+            disabled={txData.length === 0}
           >
             <Download className="h-4 w-4" /><span className="hidden sm:inline">تصدير Excel</span>
           </Button>
@@ -271,6 +291,36 @@ export function SupplierDetailClient({ supplierId, supplier: serverSupplier, tra
         userId={userId}
         banks={bankData}
         supplierName={supplier.name}
+      />
+
+      <ExportOptionsDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        title="تصدير كشف حساب المورد"
+        description="اختر النطاق الزمني والأعمدة التي تريد تضمينها."
+        defaultFromDate={txData[0]?.entry_date ?? ""}
+        defaultToDate={txData[txData.length - 1]?.entry_date ?? ""}
+        columns={SUPPLIER_EXPORT_COLUMNS}
+        onExport={(opts: ExportOptions) =>
+          exportSupplierReportPro({
+            supplierName: supplier.name,
+            supplierPhone: supplier.phone,
+            transactions: txData.map((t) => ({
+              entry_date: t.entry_date,
+              description: t.description,
+              quantity: t.quantity,
+              price: t.price,
+              debit: t.debit,
+              credit: t.credit,
+              source_type: t.source_type,
+              source_id: t.source_id,
+              is_corrected: t.is_corrected,
+              notes: t.notes,
+            })),
+            bankNameMap,
+            options: opts,
+          })
+        }
       />
     </div>
   );
