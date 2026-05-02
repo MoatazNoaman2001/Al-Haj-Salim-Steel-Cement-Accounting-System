@@ -14,7 +14,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 30 * 1000,
-            gcTime: 1000 * 60 * 60 * 24, // 24 hours — keep cache for offline use
+            gcTime: 1000 * 60 * 60 * 24,
             refetchOnWindowFocus: false,
           },
         },

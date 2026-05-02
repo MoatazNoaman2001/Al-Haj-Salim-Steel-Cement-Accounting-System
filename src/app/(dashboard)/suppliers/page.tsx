@@ -10,6 +10,7 @@ export default async function SuppliersPage() {
     const { data } = await supabase
       .from("supplier_balances")
       .select("*")
+      .eq("is_active", true)
       .order("name", { ascending: true });
     suppliers = data ?? [];
   } catch {

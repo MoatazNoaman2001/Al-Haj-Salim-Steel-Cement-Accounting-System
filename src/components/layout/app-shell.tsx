@@ -7,6 +7,7 @@ import { PowerSyncProvider } from "@/components/providers/powersync-provider";
 import { Sidebar } from "./sidebar";
 import { PageTransition } from "./page-transition";
 import { OfflineIndicator } from "./offline-indicator";
+import { InstallPwaBanner } from "./install-pwa-banner";
 import { getLocal, setLocal } from "@/lib/offline-store";
 import type { Profile } from "@/types/database";
 
@@ -65,6 +66,7 @@ export function AppShell({ userId: serverUserId, profile: serverProfile, childre
               <PageTransition>{children}</PageTransition>
             </main>
             <OfflineIndicator />
+            <InstallPwaBanner />
           </div>
         </QueryProvider>
       </PowerSyncProvider>
