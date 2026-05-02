@@ -1,19 +1,26 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, ArrowRight, Download } from "lucide-react";
+import { Plus, ArrowRight, Download, Trash2, EyeOff } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import {
   Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CUSTOMER_TX_HEADERS } from "@/lib/constants";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { CUSTOMER_TX_HEADERS, MESSAGES } from "@/lib/constants";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
 import { useSupplier, useSupplierTransactions } from "@/hooks/use-suppliers-queries";
 import { useActiveBanks } from "@/hooks/use-banks-queries";
+import { safeUpdate } from "@/lib/supabase/safe-fetch";
 import { exportSupplierReportPro } from "@/lib/export-excel";
 import {
   ExportOptionsDialog,
@@ -44,13 +51,55 @@ interface SupplierDetailClientProps {
 }
 
 export function SupplierDetailClient({ supplierId, supplier: serverSupplier, transactions, banks }: SupplierDetailClientProps) {
-  const { userId } = useUser();
+  const { userId, isAdmin } = useUser();
+  const router = useRouter();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [deleteEntry, setDeleteEntry] = useState<SupplierTransactionWithCreator | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [hideOpen, setHideOpen] = useState(false);
+  const [hiding, setHiding] = useState(false);
 
   const { data: supplier } = useSupplier(supplierId, serverSupplier);
   const { data: txData } = useSupplierTransactions(supplierId, transactions);
   const { data: bankData } = useActiveBanks(banks);
+
+  async function handleDeleteEntry() {
+    if (!deleteEntry) return;
+    setDeleting(true);
+    const { error } = await safeUpdate(
+      "supplier_transactions",
+      { is_corrected: true },
+      { id: deleteEntry.id },
+    );
+    if (error) {
+      toast.error(MESSAGES.error);
+      setDeleting(false);
+      return;
+    }
+    toast.success("تم حذف القيد بنجاح");
+    setDeleteEntry(null);
+    setDeleting(false);
+    router.refresh();
+  }
+
+  async function handleHideSupplier() {
+    setHiding(true);
+    const { error } = await safeUpdate(
+      "suppliers",
+      { is_active: false },
+      { id: supplierId },
+    );
+    if (error) {
+      toast.error(MESSAGES.error);
+      setHiding(false);
+      return;
+    }
+    toast.success("تم إخفاء المورد بنجاح");
+    setHiding(false);
+    setHideOpen(false);
+    router.push("/suppliers");
+  }
 
   const bankNameMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -109,6 +158,17 @@ export function SupplierDetailClient({ supplierId, supplier: serverSupplier, tra
           <Button size="sm" className="gap-2" onClick={() => setAddDialogOpen(true)}>
             <Plus className="h-4 w-4" />إضافة قيد
           </Button>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
+              onClick={() => setHideOpen(true)}
+              title="إخفاء المورد"
+            >
+              <EyeOff className="h-4 w-4" /><span className="hidden sm:inline">إخفاء المورد</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -145,6 +205,7 @@ export function SupplierDetailClient({ supplierId, supplier: serverSupplier, tra
               <TableHead className="text-start">له</TableHead>
               <TableHead className="text-start">{CUSTOMER_TX_HEADERS.balance}</TableHead>
               <TableHead className="text-start">{CUSTOMER_TX_HEADERS.source}</TableHead>
+              {isAdmin && <TableHead className="text-start w-[60px]">إجراءات</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -171,10 +232,23 @@ export function SupplierDetailClient({ supplierId, supplier: serverSupplier, tra
                 <TableCell className="text-xs text-muted-foreground">
                   {entry.source_type === "bank" && entry.source_id ? bankNameMap[entry.source_id] ?? "" : ""}
                 </TableCell>
+                {isAdmin && (
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => setDeleteEntry(entry)}
+                      title="حذف القيد"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TableCell>
+                )}
               </TableRow>
             )) : (
               <TableRow>
-                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={isAdmin ? 10 : 9} className="h-24 text-center text-muted-foreground">
                   لا توجد حركات لهذا المورد
                 </TableCell>
               </TableRow>
@@ -188,6 +262,7 @@ export function SupplierDetailClient({ supplierId, supplier: serverSupplier, tra
                 <TableCell className="text-green-600">{formatCurrency(totalCredit)}</TableCell>
                 <TableCell className={cn("font-bold", balanceClass)}>{formatCurrency(finalBalance)}</TableCell>
                 <TableCell />
+                {isAdmin && <TableCell />}
               </TableRow>
             </TableFooter>
           )}
@@ -215,6 +290,17 @@ export function SupplierDetailClient({ supplierId, supplier: serverSupplier, tra
                         <Badge variant="outline" className="text-[10px] mt-1">{bankName}</Badge>
                       )}
                     </div>
+                    {isAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
+                        onClick={() => setDeleteEntry(entry)}
+                        title="حذف القيد"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                   {(entry.quantity != null || entry.price != null) && (
                     <div className="grid grid-cols-2 gap-2 pt-2 border-t text-xs">
@@ -322,6 +408,52 @@ export function SupplierDetailClient({ supplierId, supplier: serverSupplier, tra
           })
         }
       />
+
+      {/* Per-transaction delete (soft delete via is_corrected) */}
+      <AlertDialog open={!!deleteEntry} onOpenChange={(open) => !open && setDeleteEntry(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف القيد</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم شطب هذا القيد ({deleteEntry?.description}). لن يظهر بعد الآن في كشف الحساب لكن سجله الأصلي يبقى محفوظاً.
+              <br />هذا الإجراء لا يمكن التراجع عنه.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteEntry}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "جاري الحذف..." : "تأكيد الحذف"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Hide supplier (soft delete via is_active=false) */}
+      <AlertDialog open={hideOpen} onOpenChange={setHideOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>إخفاء المورد</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيختفي المورد <span className="font-bold">{supplier.name}</span> من القائمة الرئيسية ولن يظهر عند إضافة قيود جديدة. كل الحركات السابقة تبقى محفوظة بالكامل.
+              <br />يمكن استرجاع المورد لاحقاً من قاعدة البيانات.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleHideSupplier}
+              disabled={hiding}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {hiding ? "جاري الإخفاء..." : "تأكيد الإخفاء"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

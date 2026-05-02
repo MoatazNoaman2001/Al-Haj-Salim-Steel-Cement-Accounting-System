@@ -31,6 +31,7 @@ export function useSupplierBalances(initialData: SupplierWithBalance[]) {
        COALESCE(SUM(CASE WHEN st.is_corrected = 0 THEN st.credit - st.debit ELSE 0 END), 0) AS balance
      FROM suppliers s
      LEFT JOIN supplier_transactions st ON st.supplier_id = s.id
+     WHERE s.is_active = 1
      GROUP BY s.id
      ORDER BY s.name ASC`,
     [],
@@ -44,6 +45,7 @@ export function useSupplierBalances(initialData: SupplierWithBalance[]) {
       const { data, error } = await supabase
         .from("supplier_balances")
         .select("*")
+        .eq("is_active", true)
         .order("name", { ascending: true });
       if (error) throw error;
       return data as SupplierWithBalance[];
@@ -83,6 +85,10 @@ export function useSupplier(supplierId: string, initialData: Supplier | null) {
     },
     initialData,
     enabled: !ps.isReady,
+    staleTime: 30 * 1000,
+    refetchOnMount: "always",
+    refetchInterval: 60 * 1000,
+    networkMode: "offlineFirst",
   });
 
   if (ps.isReady) {
