@@ -60,14 +60,14 @@ export function useCementEntries(date: string) {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("daily_cement")
-        .select(
-          `
+        .select(`
           *,
-          customer:customers!customer_id(id, name),
-          product:products!product_id(id, name),
-          creator:profiles!created_by(id, full_name)
-        `,
-        )
+          customer:customers(id, name),
+          product:products(id, name),
+          creator:profiles(id, full_name),
+          bank:banks(id, name),
+          customer_bank:customer_bank_accounts(id, bank_name)
+        `)
         .eq("entry_date", date)
         .order("row_number", { ascending: true });
 

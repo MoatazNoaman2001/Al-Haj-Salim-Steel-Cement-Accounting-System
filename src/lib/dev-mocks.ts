@@ -121,8 +121,10 @@ export function mockCementEntries(
       driver_name: b.driver,
       notes: b.notes,
       cost_per_ton: b.cost,
-      profit_per_ton: b.price - b.cost,
       total_profit: (b.price - b.cost) * b.quantity,
+      transport_in: 0,
+      tanzeel: 0,
+      bank_id: null,
       is_corrected: false,
       correction_of_id: null,
       corrected_by_entry_id: null,
@@ -134,6 +136,9 @@ export function mockCementEntries(
       customer: { id: customer.id, name: customer.name },
       product: { id: product.id, name: product.name },
       creator: mockCreator(userId),
+      bank: { id: "mock-bank-1", name: "البنك التجريبي" },
+      customer_bank: null,
+      customer_bank_id: null,
     };
   });
 
@@ -161,7 +166,6 @@ export function mockCementEntries(
     amount_paid: correctedPaid,
     remaining_balance: correctedTotal - correctedPaid,
     cost_per_ton: original.cost_per_ton,
-    profit_per_ton: original.cost_per_ton != null ? correctedPrice - original.cost_per_ton : null,
     total_profit: original.cost_per_ton != null ? (correctedPrice - original.cost_per_ton) * correctedQty : null,
     is_corrected: false,
     correction_of_id: original.id,
@@ -379,6 +383,8 @@ export function mockCustomerTransactions(
       notes: null,
       source_type: null,
       source_id: null,
+      bank_id: null,
+      customer_bank_id: null,
       created_by: userId,
       created_at: now,
       row_number: i + 1,

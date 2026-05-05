@@ -48,8 +48,6 @@ export function DataTable({
   const { data: products = [] } = useCementProducts();
   const { data: customers = [] } = useCustomers();
 
-  // Dev-only: fall back to mock data when the day has no real entries
-  // so all features (correction pair, totals, admin profit) are visible.
   const data = useMemo(() => {
     if (realData.length > 0) return realData;
     if (!IS_DEV_MOCK_ENABLED) return realData;
@@ -60,7 +58,6 @@ export function DataTable({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [customerFilter, setCustomerFilter] = useState("");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
-
   const [correctionEntry, setCorrectionEntry] =
     useState<DailyCementWithRelations | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
@@ -69,7 +66,7 @@ export function DataTable({
 
   const handleRequestCorrection = useCallback(
     (entry: DailyCementWithRelations) => {
-      if (isMockId(entry.id)) return; // no-op on dev mock rows
+      if (isMockId(entry.id)) return;
       setCorrectionEntry(entry);
     },
     []
@@ -103,20 +100,14 @@ export function DataTable({
     const activeRows = rows.filter((r) => !r.original.is_corrected);
     return {
       totalAmount: activeRows.reduce((s, r) => s + (r.original.total_amount ?? 0), 0),
+      transportIn: activeRows.reduce((s, r) => s + (r.original.transport_in ?? 0), 0),
+      tanzeel: activeRows.reduce((s, r) => s + (r.original.tanzeel ?? 0), 0),
       amountPaid: activeRows.reduce((s, r) => s + (r.original.amount_paid ?? 0), 0),
       remaining: activeRows.reduce((s, r) => s + (r.original.remaining_balance ?? 0), 0),
       transport: activeRows.reduce((s, r) => s + (r.original.transport_cost ?? 0), 0),
       totalTransport: activeRows.reduce((s, r) => s + ((r.original.quantity ?? 0) * (r.original.transport_cost ?? 0)), 0),
       totalProfit: isAdmin
         ? activeRows.reduce((s, r) => s + (r.original.total_profit ?? 0), 0)
-        : null,
-      profitLoss: isAdmin
-        ? activeRows.reduce((s, r) => {
-            if (r.original.cost_per_ton == null) return s;
-            const totalCost = (r.original.cost_per_ton + r.original.transport_cost) * r.original.quantity;
-            const totalSelling = r.original.price_per_ton * r.original.quantity;
-            return s + (totalSelling - totalCost);
-          }, 0)
         : null,
     };
   }, [table, isAdmin]);
@@ -180,6 +171,7 @@ export function DataTable({
       />
 
       <div ref={printRef}>
+        {/* Desktop table */}
         <div className="hidden md:block rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
@@ -242,34 +234,30 @@ export function DataTable({
                     {formatCurrency(totals.totalAmount)}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
+                    {totals.transportIn > 0 ? formatCurrency(totals.transportIn) : "—"}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-orange-600">
+                    {totals.tanzeel > 0 ? formatCurrency(totals.tanzeel) : "—"}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
                     {formatCurrency(totals.amountPaid)}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-destructive">
                     {formatCurrency(totals.remaining)}
                   </TableCell>
+                  <TableCell />
                   <TableCell className="whitespace-nowrap">
                     {formatCurrency(totals.transport)}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {formatCurrency(totals.totalTransport)}
                   </TableCell>
-                  <TableCell />
                   {isAdmin && (
-                    <>
-                      <TableCell />
-                      <TableCell />
-                      <TableCell />
-                      <TableCell className="whitespace-nowrap text-green-600">
-                        {formatCurrency(totals.totalProfit)}
-                      </TableCell>
-                      <TableCell className={`whitespace-nowrap font-semibold ${(totals.profitLoss ?? 0) >= 0 ? "text-green-600" : "text-destructive"}`}>
-                        {formatCurrency(totals.profitLoss)}
-                      </TableCell>
-                    </>
+                    <TableCell className="whitespace-nowrap text-green-600">
+                      {formatCurrency(totals.totalProfit)}
+                    </TableCell>
                   )}
-                  <TableCell
-                    colSpan={isAdmin ? 2 : 3}
-                  />
+                  <TableCell colSpan={isAdmin ? 5 : 4} />
                 </TableRow>
               </TableFooter>
             )}
@@ -283,11 +271,6 @@ export function DataTable({
               {table.getRowModel().rows.map((row) => {
                 const entry = row.original;
                 const totalTransport = (entry.quantity ?? 0) * (entry.transport_cost ?? 0);
-                const profitLoss =
-                  isAdmin && entry.cost_per_ton != null
-                    ? entry.price_per_ton * entry.quantity -
-                      (entry.cost_per_ton + entry.transport_cost) * entry.quantity
-                    : null;
                 return (
                   <div
                     key={row.id}
@@ -329,6 +312,18 @@ export function DataTable({
                           {formatCurrency(entry.total_amount)}
                         </div>
                       </div>
+                      {(entry.transport_in ?? 0) > 0 && (
+                        <div>
+                          <div className="text-[10px] text-muted-foreground">نقلة</div>
+                          <div>{formatCurrency(entry.transport_in)}</div>
+                        </div>
+                      )}
+                      {(entry.tanzeel ?? 0) > 0 && (
+                        <div>
+                          <div className="text-[10px] text-muted-foreground">تنزيل</div>
+                          <div className="text-orange-600">{formatCurrency(entry.tanzeel)}</div>
+                        </div>
+                      )}
                       <div>
                         <div className="text-[10px] text-muted-foreground">المدفوع</div>
                         <div>{formatCurrency(entry.amount_paid)}</div>
@@ -346,50 +341,34 @@ export function DataTable({
                         </div>
                       </div>
                       <div>
-                        <div className="text-[10px] text-muted-foreground">
-                          سعر الطن
-                        </div>
+                        <div className="text-[10px] text-muted-foreground">البنك</div>
+                        <div>{entry.bank?.name ?? "كاش"}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">سعر الطن</div>
                         <div>{formatCurrency(entry.price_per_ton)}</div>
                       </div>
                       <div>
                         <div className="text-[10px] text-muted-foreground">
-                          نقل الطن
+                          نولون الطن
                         </div>
                         <div>{formatCurrency(entry.transport_cost)}</div>
                       </div>
                       <div>
                         <div className="text-[10px] text-muted-foreground">
-                          إجمالي النقل
+                          إجمالي النولون
                         </div>
                         <div>{formatCurrency(totalTransport)}</div>
                       </div>
                       {isAdmin && entry.total_profit != null && (
-                        <>
-                          <div>
-                            <div className="text-[10px] text-muted-foreground">
-                              إجمالي الربح
-                            </div>
-                            <div className="text-green-600 font-semibold">
-                              {formatCurrency(entry.total_profit)}
-                            </div>
+                        <div>
+                          <div className="text-[10px] text-muted-foreground">
+                            إجمالي الربح
                           </div>
-                          {profitLoss != null && (
-                            <div>
-                              <div className="text-[10px] text-muted-foreground">
-                                الربح/الخسارة
-                              </div>
-                              <div
-                                className={
-                                  profitLoss >= 0
-                                    ? "text-green-600 font-semibold"
-                                    : "text-destructive font-semibold"
-                                }
-                              >
-                                {formatCurrency(profitLoss)}
-                              </div>
-                            </div>
-                          )}
-                        </>
+                          <div className="text-green-600 font-semibold">
+                            {formatCurrency(entry.total_profit)}
+                          </div>
+                        </div>
                       )}
                     </div>
 
@@ -436,6 +415,22 @@ export function DataTable({
                       {formatCurrency(totals.totalAmount)}
                     </div>
                   </div>
+                  {totals.transportIn > 0 && (
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">نقلة</div>
+                      <div className="font-bold">
+                        {formatCurrency(totals.transportIn)}
+                      </div>
+                    </div>
+                  )}
+                  {totals.tanzeel > 0 && (
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">تنزيل</div>
+                      <div className="font-bold text-orange-600">
+                        {formatCurrency(totals.tanzeel)}
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <div className="text-[10px] text-muted-foreground">المدفوع</div>
                     <div className="font-bold">
@@ -450,38 +445,28 @@ export function DataTable({
                   </div>
                   <div>
                     <div className="text-[10px] text-muted-foreground">
-                      إجمالي النقل
+                      إجمالي النولون
                     </div>
                     <div className="font-bold">
                       {formatCurrency(totals.totalTransport)}
                     </div>
                   </div>
                   {isAdmin && totals.totalProfit != null && (
-                    <>
-                      <div>
-                        <div className="text-[10px] text-muted-foreground">
-                          الربح
-                        </div>
-                        <div className="font-bold text-green-600">
-                          {formatCurrency(totals.totalProfit)}
-                        </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">
+                        الربح
                       </div>
-                      <div>
-                        <div className="text-[10px] text-muted-foreground">
-                          الربح/الخسارة
-                        </div>
-                        <div
-                          className={cn(
-                            "font-bold",
-                            (totals.profitLoss ?? 0) >= 0
-                              ? "text-green-600"
-                              : "text-destructive",
-                          )}
-                        >
-                          {formatCurrency(totals.profitLoss)}
-                        </div>
+                      <div
+                        className={cn(
+                          "font-bold",
+                          (totals.totalProfit ?? 0) >= 0
+                            ? "text-green-600"
+                            : "text-destructive",
+                        )}
+                      >
+                        {formatCurrency(totals.totalProfit)}
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>

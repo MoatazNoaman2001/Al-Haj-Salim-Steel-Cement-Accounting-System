@@ -17,10 +17,12 @@ import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
 import { useCustomer, useCustomerTransactions } from "@/hooks/use-customers-queries";
 import { useActiveBanks } from "@/hooks/use-banks-queries";
+import { useCustomerBankAccounts } from "@/hooks/use-customer-bank-accounts";
 import { safeUpdate } from "@/lib/supabase/safe-fetch";
 import { AddCustomerTransactionDialog } from "./add-transaction-dialog";
 import { CustomerCorrectionDialog } from "./correction-dialog";
 import { ReservationsTable } from "./reservations-table";
+import { BankAccountsTab } from "./bank-accounts-tab";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -61,13 +63,31 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
   const isUsingMock = txData !== realTxData && txData.length > 0;
 
   const { data: bankData } = useActiveBanks(banks);
+  const { data: customerBanks = [] } = useCustomerBankAccounts(customerId);
 
-  // Build bank name lookup
+  // Build bank name lookups
   const bankNameMap = useMemo(() => {
     const map: Record<string, string> = {};
     bankData.forEach((b) => { map[b.id] = b.name; });
     return map;
   }, [bankData]);
+  const customerBankNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    customerBanks.forEach((b) => { map[b.id] = b.bank_name; });
+    return map;
+  }, [customerBanks]);
+
+  // Resolve "from / to" bank names for a transaction.
+  // Falls back to legacy source_id when source_type='bank' (pre-v10 rows).
+  function resolveBanks(entry: CustomerTransactionWithCreator) {
+    const companyBankId =
+      entry.bank_id ?? (entry.source_type === "bank" ? entry.source_id : null);
+    const fromName = entry.customer_bank_id
+      ? customerBankNameMap[entry.customer_bank_id] ?? null
+      : null;
+    const toName = companyBankId ? bankNameMap[companyBankId] ?? null : null;
+    return { fromName, toName };
+  }
 
   const { rows, totalDebit, totalCredit, finalBalance } = useMemo(() => {
     let runningBalance = 0;
@@ -118,6 +138,7 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
         <TabsList className="mb-4">
           <TabsTrigger value="statement">كشف الحساب</TabsTrigger>
           <TabsTrigger value="reservations">محجوز العملاء</TabsTrigger>
+          <TabsTrigger value="banks">الحسابات البنكية</TabsTrigger>
         </TabsList>
 
         <TabsContent value="statement">
@@ -200,7 +221,21 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
                   <TableCell className={entry.credit > 0 ? "text-green-600 font-semibold" : ""}>{entry.credit > 0 ? formatCurrency(entry.credit) : ""}</TableCell>
                   <TableCell className={cn("font-bold", entry.runningBalance > 0 ? "text-red-600" : "text-green-600")}>{formatCurrency(entry.runningBalance)}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {entry.source_type === "bank" && entry.source_id ? bankNameMap[entry.source_id] ?? "" : ""}
+                    {(() => {
+                      const { fromName, toName } = resolveBanks(entry);
+                      if (!fromName && !toName) return "";
+                      if (fromName && toName) {
+                        return (
+                          <span className="whitespace-nowrap">
+                            <span className="text-blue-700">{fromName}</span>
+                            <span className="mx-1">←</span>
+                            <span>{toName}</span>
+                          </span>
+                        );
+                      }
+                      if (toName) return <span>إلى {toName}</span>;
+                      return <span className="text-blue-700">من {fromName}</span>;
+                    })()}
                   </TableCell>
                   {isAdmin && (
                     <TableCell>
@@ -245,10 +280,7 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
               const isCorrected = entry.is_corrected;
               const isCorrection = !!entry.correction_of_id;
               const canAction = !isCorrected && !isCorrection;
-              const bankName =
-                entry.source_type === "bank" && entry.source_id
-                  ? bankNameMap[entry.source_id]
-                  : "";
+              const { fromName: customerBankName, toName: companyBankName } = resolveBanks(entry);
               return (
                 <div
                   key={entry.id}
@@ -281,9 +313,14 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
                             تصحيح
                           </Badge>
                         )}
-                        {bankName && (
+                        {customerBankName && (
+                          <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-700">
+                            من {customerBankName}
+                          </Badge>
+                        )}
+                        {companyBankName && (
                           <Badge variant="outline" className="text-[10px]">
-                            {bankName}
+                            إلى {companyBankName}
                           </Badge>
                         )}
                       </div>
@@ -422,6 +459,10 @@ export function CustomerDetailClient({ customerId, customer: serverCustomer, tra
             customerName={customer.name}
             initialReservations={reservations}
           />
+        </TabsContent>
+
+        <TabsContent value="banks">
+          <BankAccountsTab customerId={customer.id} />
         </TabsContent>
       </Tabs>
 

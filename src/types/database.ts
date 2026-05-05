@@ -35,6 +35,21 @@ export interface Product {
   created_at: string;
 }
 
+// Customer Bank Accounts (حسابات العملاء البنكية)
+// Stores a customer's own bank accounts so transactions can record
+// which account the customer paid FROM (as opposed to bank_id which
+// records which COMPANY account received the payment).
+export interface CustomerBankAccount {
+  id: string;
+  customer_id: string;
+  bank_name: string;
+  account_number: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DailyCement {
   id: string;
   entry_date: string;
@@ -42,15 +57,18 @@ export interface DailyCement {
   product_id: string;
   quantity: number;
   price_per_ton: number;
-  total_amount: number; // generated
+  total_amount: number; // generated: quantity * price_per_ton
   amount_paid: number;
-  remaining_balance: number; // generated
-  transport_cost: number;
+  remaining_balance: number; // generated: total + transport_in - tanzeel - amount_paid
+  transport_cost: number; // = نولون out per ton (paid to driver)
+  transport_in: number; // = نولون in (flat fee collected from customer)
+  tanzeel: number; // = discount given to customer
+  bank_id: string | null; // company bank that received amount_paid
+  customer_bank_id: string | null; // customer's bank account the payment came FROM
   driver_name: string | null;
   notes: string | null;
   cost_per_ton: number | null;
-  profit_per_ton: number | null; // generated
-  total_profit: number | null; // generated
+  total_profit: number | null; // generated: (total + transport_in) - cogs - transport_out_total - tanzeel
   is_corrected: boolean;
   correction_of_id: string | null;
   corrected_by_entry_id: string | null;
@@ -65,6 +83,8 @@ export interface DailyCementWithRelations extends DailyCement {
   customer: Pick<Customer, "id" | "name">;
   product: Pick<Product, "id" | "name">;
   creator: Pick<Profile, "id" | "full_name">;
+  bank: Pick<Bank, "id" | "name"> | null;
+  customer_bank: Pick<CustomerBankAccount, "id" | "bank_name"> | null;
 }
 
 export interface DailyCementInsert {
@@ -74,7 +94,11 @@ export interface DailyCementInsert {
   quantity: number;
   price_per_ton: number;
   amount_paid: number;
-  transport_cost: number;
+  transport_cost: number; // نولون out per ton
+  transport_in?: number; // نولون in flat fee (default 0)
+  tanzeel?: number; // discount (default 0)
+  bank_id?: string | null;
+  customer_bank_id?: string | null;
   driver_name?: string | null;
   notes?: string;
   cost_per_ton?: number | null;
@@ -237,6 +261,8 @@ export interface CustomerTransaction {
   notes: string | null;
   source_type: string | null;
   source_id: string | null;
+  bank_id: string | null;          // company bank (destination of payment)
+  customer_bank_id: string | null; // customer's bank (source of payment)
   created_by: string;
   created_at: string;
   row_number: number;

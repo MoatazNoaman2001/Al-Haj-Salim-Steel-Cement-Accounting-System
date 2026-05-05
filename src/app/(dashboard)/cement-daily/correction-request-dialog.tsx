@@ -2,8 +2,11 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect } from "react";
 import { useUser } from "@/hooks/use-user";
 import { useCustomers, useCementProducts } from "@/hooks/use-cement-daily-queries";
+import { useBanks } from "@/hooks/use-banks";
+import { useCustomerBankAccounts } from "@/hooks/use-customer-bank-accounts";
 import { useRequestCorrection } from "@/hooks/use-cement-daily-mutations";
 import {
   correctionRequestSchema,
@@ -28,6 +31,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { CustomerCombobox } from "@/components/shared/customer-combobox";
 import { ProductSelect } from "@/components/shared/product-select";
+import { BankSelect } from "@/components/shared/bank-select";
+import { CustomerBankSelect } from "@/components/shared/customer-bank-select";
 import type { DailyCementWithRelations } from "@/types/database";
 import { toast } from "sonner";
 
@@ -43,6 +48,7 @@ export function CorrectionRequestDialog({
   const { userId } = useUser();
   const { data: customers = [] } = useCustomers();
   const { data: products = [] } = useCementProducts();
+  const { data: banks = [] } = useBanks();
   const requestCorrection = useRequestCorrection();
 
   const form = useForm<CorrectionRequestFormValues>({
@@ -54,13 +60,27 @@ export function CorrectionRequestDialog({
           product_id: entry.product_id,
           quantity: String(entry.quantity),
           price_per_ton: String(entry.price_per_ton),
+          transport_in: String(entry.transport_in ?? 0),
+          tanzeel: String(entry.tanzeel ?? 0),
           amount_paid: String(entry.amount_paid),
+          bank_id: entry.bank_id ?? "",
+          customer_bank_id: entry.customer_bank_id ?? "",
           transport_cost: String(entry.transport_cost),
           driver_name: entry.driver_name ?? "",
           notes: entry.notes ?? "",
         }
       : undefined,
   });
+
+  const selectedCustomerId = form.watch("customer_id");
+  const { data: customerBanks = [] } = useCustomerBankAccounts(selectedCustomerId || entry?.customer_id);
+
+  useEffect(() => {
+    if (!entry) return;
+    if (selectedCustomerId && selectedCustomerId !== entry.customer_id) {
+      form.setValue("customer_bank_id", "");
+    }
+  }, [selectedCustomerId, entry, form]);
 
   async function onSubmit(values: CorrectionRequestFormValues) {
     if (!entry) return;
@@ -76,8 +96,16 @@ export function CorrectionRequestDialog({
       proposedChanges.quantity = Number(proposed.quantity);
     if (Number(proposed.price_per_ton) !== entry.price_per_ton)
       proposedChanges.price_per_ton = Number(proposed.price_per_ton);
+    if (Number(proposed.transport_in) !== (entry.transport_in ?? 0))
+      proposedChanges.transport_in = Number(proposed.transport_in);
+    if (Number(proposed.tanzeel) !== (entry.tanzeel ?? 0))
+      proposedChanges.tanzeel = Number(proposed.tanzeel);
     if (Number(proposed.amount_paid) !== entry.amount_paid)
       proposedChanges.amount_paid = Number(proposed.amount_paid);
+    if ((proposed.bank_id ?? "") !== (entry.bank_id ?? ""))
+      proposedChanges.bank_id = proposed.bank_id || null;
+    if ((proposed.customer_bank_id ?? "") !== (entry.customer_bank_id ?? ""))
+      proposedChanges.customer_bank_id = proposed.customer_bank_id || null;
     if (Number(proposed.transport_cost) !== entry.transport_cost)
       proposedChanges.transport_cost = Number(proposed.transport_cost);
     if ((proposed.driver_name ?? "") !== (entry.driver_name ?? ""))
@@ -107,7 +135,7 @@ export function CorrectionRequestDialog({
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>طلب تصحيح عملية</DialogTitle>
         </DialogHeader>
@@ -193,12 +221,56 @@ export function CorrectionRequestDialog({
                 />
                 <FormField
                   control={form.control}
+                  name="transport_in"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>نقلة (تحصيل نقل)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="tanzeel"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>التنزيل</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="amount_paid"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>المدفوع</FormLabel>
                       <FormControl>
                         <Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="bank_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>البنك</FormLabel>
+                      <FormControl>
+                        <BankSelect
+                          banks={banks}
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="كاش / بدون بنك"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -217,6 +289,25 @@ export function CorrectionRequestDialog({
                     </FormItem>
                   )}
                 />
+                {customerBanks.length > 0 && (
+                  <FormField
+                    control={form.control}
+                    name="customer_bank_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>حساب العميل البنكي</FormLabel>
+                        <FormControl>
+                          <CustomerBankSelect
+                            accounts={customerBanks}
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <FormField
                   control={form.control}
                   name="driver_name"

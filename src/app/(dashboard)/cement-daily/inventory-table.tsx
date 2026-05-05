@@ -17,7 +17,7 @@ import { INVENTORY_TABLE_HEADERS } from "@/lib/constants";
 import { formatCurrency, formatQuantity } from "@/lib/utils";
 import { DevMockBanner } from "@/components/dev-mock-banner";
 import { useUser } from "@/hooks/use-user";
-import { useDailyInventory, useCementProducts, useCementEntries, useCustomers } from "@/hooks/use-cement-daily-queries";
+import { useDailyInventory, useCementProducts, useCementEntries, useCustomers, useDailyDeposits, useDailyCashBalance } from "@/hooks/use-cement-daily-queries";
 import { useUpsertInventory } from "@/hooks/use-cement-daily-mutations";
 import { useRealtimeInventoryRQ } from "@/hooks/use-cement-daily-realtime";
 import { IS_DEV_MOCK_ENABLED, mockInventory, mockCementEntries } from "@/lib/dev-mocks";
@@ -33,6 +33,8 @@ export function InventoryTable({ date, category = "cement" }: InventoryTableProp
   const { data: products = [] } = useCementProducts(category);
   const { data: realEntries = [] } = useCementEntries(date);
   const { data: customers = [] } = useCustomers();
+  const { data: deposits = [] } = useDailyDeposits(date);
+  const { data: cashBalanceData = null } = useDailyCashBalance(date);
   const upsertInventory = useUpsertInventory(date);
 
   useRealtimeInventoryRQ(date);
@@ -153,6 +155,18 @@ export function InventoryTable({ date, category = "cement" }: InventoryTableProp
     }),
     [rows]
   );
+
+  const closingBalance = useMemo(() => {
+    const activeEntries = entries.filter((e) => !e.is_corrected);
+    const cashReceived = activeEntries
+      .filter((e) => !e.bank_id)
+      .reduce((sum, e) => sum + (e.amount_paid ?? 0), 0);
+    const totalDeposits = deposits.reduce((sum, d) => sum + (d.amount ?? 0), 0);
+    const openingBalance = cashBalanceData?.opening_balance ?? 0;
+    return openingBalance + cashReceived - totalDeposits;
+  }, [entries, deposits, cashBalanceData]);
+
+  const grandTotal = totals.remaining_cost + closingBalance;
 
   const hasEdits = (productId: string) => {
     const e = editedValues[productId];
@@ -322,6 +336,32 @@ export function InventoryTable({ date, category = "cement" }: InventoryTableProp
               )}
               <TableCell />
             </TableRow>
+            <TableRow className="font-bold bg-blue-50/50">
+              <TableCell colSpan={5}>رصيد الجهاز</TableCell>
+              {isAdmin ? (
+                <>
+                  <TableCell>—</TableCell>
+                  <TableCell className="text-blue-700">
+                    {formatCurrency(closingBalance)}
+                  </TableCell>
+                  <TableCell />
+                </>
+              ) : (
+                <TableCell className="text-blue-700">
+                  {formatCurrency(closingBalance)}
+                </TableCell>
+              )}
+            </TableRow>
+            {isAdmin && (
+              <TableRow className="font-bold bg-primary/5 border-t-2 border-primary/20">
+                <TableCell colSpan={5}>الإجمالي الكلي (مخزون + كاشير)</TableCell>
+                <TableCell>—</TableCell>
+                <TableCell className="text-primary text-base">
+                  {formatCurrency(grandTotal)}
+                </TableCell>
+                <TableCell />
+              </TableRow>
+            )}
           </TableFooter>
         </Table>
       </div>
@@ -506,6 +546,31 @@ export function InventoryTable({ date, category = "cement" }: InventoryTableProp
             )}
           </div>
         </div>
+
+        {/* رصيد الجهاز card */}
+        <div className="rounded-lg border bg-blue-50/50 p-3">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-sm">رصيد الجهاز</span>
+            <span className="font-bold text-blue-700 text-base">
+              {formatCurrency(closingBalance)}
+            </span>
+          </div>
+        </div>
+
+        {/* Grand total card (admin only) */}
+        {isAdmin && (
+          <div className="rounded-lg border bg-primary/5 border-primary/20 p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold text-sm">الإجمالي الكلي</div>
+                <div className="text-[10px] text-muted-foreground">مخزون + كاشير</div>
+              </div>
+              <span className="font-bold text-primary text-xl">
+                {formatCurrency(grandTotal)}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { CustomerBankSelect } from "@/components/shared/customer-bank-select";
+import { useCustomerBankAccounts } from "@/hooks/use-customer-bank-accounts";
 import type { Bank } from "@/types/database";
 
 const CASH_SOURCES = [
@@ -35,6 +37,7 @@ const schema = z.object({
   price: z.string().optional(),
   amount: z.string().optional(),
   payment_source: z.string().optional(),
+  customer_bank_id: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -53,7 +56,7 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { entry_date: todayISO(), type: "debit", description: "", quantity: "", price: "", amount: "", payment_source: "" },
+    defaultValues: { entry_date: todayISO(), type: "debit", description: "", quantity: "", price: "", amount: "", payment_source: "", customer_bank_id: "" },
   });
 
   const txType = form.watch("type");
@@ -61,12 +64,15 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
   const price = Number(form.watch("price")) || 0;
   const calculatedAmount = quantity * price;
 
+  const { data: customerBanks = [] } = useCustomerBankAccounts(customerId);
+
   // Reset fields when switching type
   useEffect(() => {
     form.setValue("quantity", "");
     form.setValue("price", "");
     form.setValue("amount", "");
     form.setValue("payment_source", "");
+    form.setValue("customer_bank_id", "");
     form.setValue("description", "");
   }, [txType, form]);
 
@@ -112,6 +118,8 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
       debit, credit,
       source_type: isBankSource ? "bank" : values.type === "credit" ? "cash" : "manual",
       source_id: isBankSource ? values.payment_source! : null,
+      bank_id: isBankSource ? values.payment_source! : null,
+      customer_bank_id: values.customer_bank_id || null,
       created_by: userId,
     });
 
@@ -135,7 +143,7 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
     }
 
     toast.success(MESSAGES.customerTransactionAdded);
-    form.reset({ entry_date: todayISO(), type: "debit", description: "", quantity: "", price: "", amount: "", payment_source: "" });
+    form.reset({ entry_date: todayISO(), type: "debit", description: "", quantity: "", price: "", amount: "", payment_source: "", customer_bank_id: "" });
     onOpenChange(false);
     router.refresh();
   }
@@ -198,7 +206,7 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
                 )} />
                 <FormField control={form.control} name="payment_source" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>مصدر الدفع <span className="text-destructive">*</span></FormLabel>
+                    <FormLabel>إلى (وجهة الدفع) <span className="text-destructive">*</span></FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger><SelectValue placeholder="اختر مصدر الدفع" /></SelectTrigger>
@@ -209,7 +217,7 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
                         ))}
                         {banks.length > 0 && (
                           <>
-                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-t mt-1 pt-1">البنوك</div>
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-t mt-1 pt-1">بنوك / محافظ / إنستاباي</div>
                             {banks.map((bank) => (
                               <SelectItem key={bank.id} value={bank.id}>{bank.name}</SelectItem>
                             ))}
@@ -220,6 +228,21 @@ export function AddCustomerTransactionDialog({ open, onOpenChange, customerId, u
                     <FormMessage />
                   </FormItem>
                 )} />
+                {customerBanks.length > 0 && (
+                  <FormField control={form.control} name="customer_bank_id" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>من حساب العميل (اختياري)</FormLabel>
+                      <FormControl>
+                        <CustomerBankSelect
+                          accounts={customerBanks}
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                )}
               </>
             )}
 
