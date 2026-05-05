@@ -81,6 +81,28 @@ export function getBaseColumns(
       size: 120,
     },
     {
+      accessorKey: "transport_in",
+      header: TABLE_HEADERS.transportIn,
+      cell: ({ getValue }) => {
+        const val = getValue() as number;
+        return val > 0 ? formatCurrency(val) : "—";
+      },
+      size: 100,
+    },
+    {
+      accessorKey: "tanzeel",
+      header: TABLE_HEADERS.tanzeel,
+      cell: ({ getValue }) => {
+        const val = getValue() as number;
+        return val > 0 ? (
+          <span className="text-orange-600">{formatCurrency(val)}</span>
+        ) : (
+          "—"
+        );
+      },
+      size: 100,
+    },
+    {
       accessorKey: "amount_paid",
       header: TABLE_HEADERS.amountPaid,
       cell: ({ getValue }) => formatCurrency(getValue() as number),
@@ -98,6 +120,20 @@ export function getBaseColumns(
         );
       },
       size: 110,
+    },
+    {
+      accessorKey: "bank.name",
+      id: "bank_name",
+      header: TABLE_HEADERS.bank,
+      cell: ({ row }) => row.original.bank?.name ?? "كاش",
+      size: 130,
+    },
+    {
+      accessorKey: "customer_bank.bank_name",
+      id: "customer_bank_name",
+      header: TABLE_HEADERS.customerBank,
+      cell: ({ row }) => row.original.customer_bank?.bank_name ?? "—",
+      size: 130,
     },
     {
       accessorKey: "transport_cost",
@@ -190,19 +226,6 @@ export function getAdminColumns(): ColumnDef<DailyCementWithRelations>[] {
       size: 110,
     },
     {
-      accessorKey: "profit_per_ton",
-      header: TABLE_HEADERS.profitPerTon,
-      cell: ({ getValue }) => {
-        const val = getValue() as number | null;
-        return (
-          <span className={val != null && val > 0 ? "text-green-600 font-medium" : ""}>
-            {formatCurrency(val)}
-          </span>
-        );
-      },
-      size: 100,
-    },
-    {
       accessorKey: "total_profit",
       header: TABLE_HEADERS.totalProfit,
       cell: ({ getValue }) => {
@@ -210,23 +233,6 @@ export function getAdminColumns(): ColumnDef<DailyCementWithRelations>[] {
         return (
           <span className={val != null && val > 0 ? "text-green-600 font-semibold" : ""}>
             {formatCurrency(val)}
-          </span>
-        );
-      },
-      size: 120,
-    },
-    {
-      id: "profit_loss",
-      header: TABLE_HEADERS.profitLoss,
-      cell: ({ row }) => {
-        const entry = row.original;
-        if (entry.cost_per_ton == null) return "—";
-        const totalCost = (entry.cost_per_ton + entry.transport_cost) * entry.quantity;
-        const totalSelling = entry.price_per_ton * entry.quantity;
-        const profitLoss = totalSelling - totalCost;
-        return (
-          <span className={profitLoss >= 0 ? "text-green-600 font-semibold" : "text-destructive font-semibold"}>
-            {formatCurrency(profitLoss)}
           </span>
         );
       },
@@ -242,7 +248,6 @@ export function buildColumns(
   const base = getBaseColumns(onRequestCorrection);
   if (!isAdmin) return base;
 
-  // Insert admin columns after "remaining_balance" (index 7)
   const adminCols = getAdminColumns();
   const insertIndex = base.findIndex((c) => c.id === "status");
   return [

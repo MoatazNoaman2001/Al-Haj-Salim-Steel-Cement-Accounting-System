@@ -31,8 +31,13 @@ const FIELD_LABELS: Record<string, string> = {
   product_id: "الصنف",
   quantity: "الكمية",
   price_per_ton: "سعر الطن",
+  transport_in: "نقلة",
+  tanzeel: "تنزيل",
   amount_paid: "المدفوع",
+  bank_id: "بنك الشركة",
+  customer_bank_id: "حساب العميل البنكي",
   transport_cost: "النولون",
+  driver_name: "السائق",
   notes: "ملاحظات",
 };
 

@@ -1,0 +1,4373 @@
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\supabase\migration-update.sql
+================================================================================
+
+-- =====================================================
+-- Al-Haj Salim - v2 UPDATE Migration
+-- Run this ONLY if you already ran the v1 migration.
+-- This drops the old daily_bonds table and adds new tables.
+-- =====================================================
+
+-- Drop the old bonds table (it was wrong - we need inventory instead)
+DROP TABLE IF EXISTS daily_bonds CASCADE;
+
+-- =====================================================
+-- 7. DAILY INVENTORY / جدول البونات (Stock Tracking)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS daily_inventory (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  product_id UUID NOT NULL REFERENCES products(id),
+  previous_balance NUMERIC(10,3) NOT NULL DEFAULT 0,
+  added NUMERIC(10,3) NOT NULL DEFAULT 0,
+  cost_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(entry_date, product_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_inventory_date ON daily_inventory(entry_date);
+
+ALTER TABLE daily_inventory ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read inventory" ON daily_inventory
+  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Insert inventory" ON daily_inventory
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
+CREATE POLICY "Update inventory" ON daily_inventory
+  FOR UPDATE USING (created_by = auth.uid() OR is_admin());
+
+
+-- =====================================================
+-- 9. DAILY DEPOSITS / الايداعات
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS daily_deposits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  amount NUMERIC(14,2) NOT NULL,
+  description TEXT,
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  row_number SERIAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_deposits_date ON daily_deposits(entry_date);
+
+ALTER TABLE daily_deposits ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read deposits" ON daily_deposits
+  FOR SELECT USING (created_by = auth.uid() OR is_admin());
+CREATE POLICY "Insert deposits" ON daily_deposits
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
+CREATE POLICY "Admin delete deposits" ON daily_deposits
+  FOR DELETE USING (is_admin());
+
+
+-- =====================================================
+-- 10. CASHIER DAILY LEDGER / يومية الكاشير
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS daily_cashier (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  description TEXT NOT NULL,
+  debit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  credit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  row_number SERIAL,
+  is_corrected BOOLEAN DEFAULT false,
+  correction_of_id UUID REFERENCES daily_cashier(id),
+  corrected_by_entry_id UUID REFERENCES daily_cashier(id),
+  correction_reason TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_cashier_date ON daily_cashier(entry_date);
+CREATE INDEX IF NOT EXISTS idx_cashier_created_by ON daily_cashier(created_by);
+
+ALTER TABLE daily_cashier ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read cashier entries" ON daily_cashier
+  FOR SELECT USING (created_by = auth.uid() OR is_admin());
+CREATE POLICY "Insert cashier entries" ON daily_cashier
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
+CREATE POLICY "Admin update cashier entries" ON daily_cashier
+  FOR UPDATE USING (is_admin());
+
+
+-- =====================================================
+-- Update realtime (add new tables, remove old bonds)
+-- =====================================================
+
+-- Remove old bonds from realtime (ignore error if not exists)
+-- ALTER PUBLICATION supabase_realtime DROP TABLE daily_bonds;
+
+ALTER PUBLICATION supabase_realtime ADD TABLE daily_inventory;
+ALTER PUBLICATION supabase_realtime ADD TABLE daily_deposits;
+ALTER PUBLICATION supabase_realtime ADD TABLE daily_cashier;
+
+
+-- =====================================================
+-- Update seed data with correct product names
+-- =====================================================
+
+-- Cement product types (confirmed by accountant)
+INSERT INTO products (name, category, unit) VALUES
+  ('مقاوم مصريين', 'cement', 'ton'),
+  ('عاده مصريين', 'cement', 'ton'),
+  ('سايب مصريين', 'cement', 'ton'),
+  ('مقاوم تعمير', 'cement', 'ton'),
+  ('عاده 32 تعمير', 'cement', 'ton'),
+  ('تشطيبات', 'cement', 'ton'),
+  ('سايب تعمير', 'cement', 'ton'),
+  ('مقاوم اسيوط', 'cement', 'ton'),
+  ('عاده اسيوط', 'cement', 'ton'),
+  ('سايب اسيوط', 'cement', 'ton'),
+  ('مهندس', 'cement', 'ton'),
+  ('الفهد', 'cement', 'ton'),
+  ('عاده 42 السهم', 'cement', 'ton')
+ON CONFLICT DO NOTHING;
+
+-- Steel product types (confirmed by accountant)
+INSERT INTO products (name, category, unit) VALUES
+  ('حديد عز', 'steel', 'ton'),
+  ('حديد جيوشى', 'steel', 'ton'),
+  ('حديد العربيه للصلب', 'steel', 'ton'),
+  ('حديد النوبريه', 'steel', 'ton'),
+  ('حديد المصريين', 'steel', 'ton'),
+  ('حديد عنتر', 'steel', 'ton'),
+  ('حديد المراكبى', 'steel', 'ton'),
+  ('مصر استيل', 'steel', 'ton')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO customers (name, phone) VALUES
+  ('احمد توفيق', NULL),
+  ('اسعد جورج', NULL),
+  ('شركة البدري', NULL),
+  ('اشرف ديروط', NULL),
+  ('حسين كمال', NULL),
+  ('طارق أسيوط الجديد', NULL),
+  ('احمد هيبك', NULL),
+  ('ايمن كمال شكرى', NULL)
+ON CONFLICT DO NOTHING;
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\supabase\migration-v3.sql
+================================================================================
+
+-- =====================================================
+-- Al-Haj Salim - Steel & Cement Accounting System
+-- Database Migration v3 - Banks, Customer Ledger
+-- Run this in Supabase SQL Editor AFTER migration.sql
+-- =====================================================
+
+-- =====================================================
+-- 1. BANK ACCOUNTS (حسابات البنوك)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS banks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  account_number TEXT,
+  balance NUMERIC(14,2) NOT NULL DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE banks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated read banks" ON banks
+  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin manage banks" ON banks
+  FOR ALL USING (is_admin());
+
+-- Bank Ledger (كشف حساب البنك)
+CREATE TABLE IF NOT EXISTS bank_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bank_id UUID NOT NULL REFERENCES banks(id),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  description TEXT NOT NULL,
+  debit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  credit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  row_number SERIAL,
+  is_corrected BOOLEAN DEFAULT false,
+  correction_of_id UUID REFERENCES bank_transactions(id),
+  corrected_by_entry_id UUID REFERENCES bank_transactions(id),
+  correction_reason TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_bank_tx_bank ON bank_transactions(bank_id);
+CREATE INDEX IF NOT EXISTS idx_bank_tx_date ON bank_transactions(entry_date);
+
+ALTER TABLE bank_transactions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated read bank_transactions" ON bank_transactions
+  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated insert bank_transactions" ON bank_transactions
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
+CREATE POLICY "Admin update bank_transactions" ON bank_transactions
+  FOR UPDATE USING (is_admin());
+
+
+-- =====================================================
+-- 2. CUSTOMER LEDGER (كشف حساب العميل)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS customer_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id UUID NOT NULL REFERENCES customers(id),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  description TEXT NOT NULL,
+  quantity NUMERIC(10,3),
+  price NUMERIC(12,2),
+  debit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  credit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  source_type TEXT,
+  source_id UUID,
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  row_number SERIAL,
+  is_corrected BOOLEAN DEFAULT false,
+  correction_of_id UUID REFERENCES customer_transactions(id),
+  corrected_by_entry_id UUID REFERENCES customer_transactions(id),
+  correction_reason TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_tx_customer ON customer_transactions(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_tx_date ON customer_transactions(entry_date);
+
+ALTER TABLE customer_transactions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read customer_transactions" ON customer_transactions
+  FOR SELECT USING (created_by = auth.uid() OR is_admin());
+CREATE POLICY "Insert customer_transactions" ON customer_transactions
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
+CREATE POLICY "Admin update customer_transactions" ON customer_transactions
+  FOR UPDATE USING (is_admin());
+
+
+-- =====================================================
+-- 3. ENABLE REALTIME
+-- =====================================================
+
+ALTER PUBLICATION supabase_realtime ADD TABLE banks;
+ALTER PUBLICATION supabase_realtime ADD TABLE bank_transactions;
+ALTER PUBLICATION supabase_realtime ADD TABLE customer_transactions;
+ALTER PUBLICATION supabase_realtime ADD TABLE customers;
+
+
+-- =====================================================
+-- 4. SEED BANK DATA
+-- =====================================================
+
+INSERT INTO banks (name, balance) VALUES
+  ('بنك الاهلى (سليم)', 587209),
+  ('بنك الاسكندرية هشام شركات', 9158731),
+  ('بنك الاسكندرية يوسف شركات', 6137247),
+  ('بنك مصر يوسف شركات', 309585),
+  ('بنك مصر الشرق شركات', 3092494),
+  ('بنك الاسكندرية الشرق شركات', 6093648),
+  ('بنك ابو ظبى (الاول)', 513215),
+  ('انستا باى بنك الاسكندريه', 1020606),
+  ('انستا باي بنك الاهلى', 657289),
+  ('فودافون كاش', 76425),
+  ('اتصالات كاش', 26549),
+  ('البريد المصرى', 115311),
+  ('فودافون كاش (جيمى)', 6179),
+  ('فودافون كاش (يوسف يوسف)', 23995),
+  ('الاهلى (يوسف يوسف)', 1650),
+  ('بنك العقارى المصرى العربى', 50000)
+ON CONFLICT DO NOTHING;
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\supabase\migration-v4.sql
+================================================================================
+
+-- =====================================================
+-- Al-Haj Salim - Steel & Cement Accounting System
+-- Database Migration v4 - Generic Action Requests
+-- Run this in Supabase SQL Editor AFTER migration-v3.sql
+-- =====================================================
+
+-- =====================================================
+-- 1. ACTION REQUESTS (طلبات التعديل والحذف)
+-- Generic request table for edit/delete on any entity
+-- =====================================================
+
+CREATE TYPE action_type AS ENUM ('edit', 'delete');
+CREATE TYPE entity_type AS ENUM ('bank', 'bank_transaction', 'customer', 'customer_transaction');
+
+CREATE TABLE IF NOT EXISTS action_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  action action_type NOT NULL,
+  entity entity_type NOT NULL,
+  entity_id UUID NOT NULL,
+  proposed_changes JSONB,  -- for edit: { name: "new name", balance: 1000 }
+  reason TEXT NOT NULL,
+  status correction_status DEFAULT 'pending',  -- reuse existing enum: pending/approved/rejected
+  requested_by UUID NOT NULL REFERENCES profiles(id),
+  reviewed_by UUID REFERENCES profiles(id),
+  reviewed_at TIMESTAMPTZ,
+  rejection_reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_action_requests_status ON action_requests(status);
+CREATE INDEX IF NOT EXISTS idx_action_requests_entity ON action_requests(entity, entity_id);
+
+ALTER TABLE action_requests ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read action_requests" ON action_requests
+  FOR SELECT USING (requested_by = auth.uid() OR is_admin());
+CREATE POLICY "Insert action_requests" ON action_requests
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND requested_by = auth.uid());
+CREATE POLICY "Admin update action_requests" ON action_requests
+  FOR UPDATE USING (is_admin());
+
+ALTER PUBLICATION supabase_realtime ADD TABLE action_requests;
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\supabase\migration-v5-driver.sql
+================================================================================
+
+-- Migration V5: Add driver_name column to daily_cement
+-- This adds a field for tracking the driver (السائق) for each cement delivery
+
+ALTER TABLE daily_cement ADD COLUMN IF NOT EXISTS driver_name TEXT;
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\supabase\migration-v5.sql
+================================================================================
+
+-- =====================================================
+-- Al-Haj Salim - Steel & Cement Accounting System
+-- Database Migration v5 - Customer Account Auto-Sync
+-- Run this in Supabase SQL Editor AFTER migration-v4.sql
+-- =====================================================
+-- This migration connects daily_cement (sales) to
+-- customer_transactions (customer ledger) automatically.
+-- Every sale creates a DEBIT entry. Corrections cascade.
+-- =====================================================
+
+
+-- =====================================================
+-- 1. TRIGGER: daily_cement INSERT → customer_transactions DEBIT
+-- =====================================================
+-- When a new cement/steel sale is recorded, auto-create
+-- a debit entry in the customer's account ledger.
+-- Skips corrected entries (is_corrected = true).
+
+CREATE OR REPLACE FUNCTION sync_cement_to_customer_transaction()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_product_name TEXT;
+  v_product_category TEXT;
+  v_total NUMERIC(14,2);
+BEGIN
+  -- Skip if this entry is already marked as corrected (old entry being replaced)
+  IF NEW.is_corrected = true THEN
+    RETURN NEW;
+  END IF;
+
+  -- Get product info for the description
+  SELECT name, category INTO v_product_name, v_product_category
+  FROM products WHERE id = NEW.product_id;
+
+  -- Calculate total (same as generated column: quantity * price_per_ton)
+  v_total := NEW.quantity * NEW.price_per_ton;
+
+  -- Create debit entry in customer_transactions
+  INSERT INTO customer_transactions (
+    customer_id,
+    entry_date,
+    description,
+    quantity,
+    price,
+    debit,
+    credit,
+    notes,
+    source_type,
+    source_id,
+    created_by
+  ) VALUES (
+    NEW.customer_id,
+    NEW.entry_date,
+    v_product_name,
+    NEW.quantity,
+    NEW.price_per_ton,
+    v_total,          -- عليه (debit = what customer owes)
+    0,
+    NEW.notes,
+    v_product_category,  -- 'cement' or 'steel'
+    NEW.id,              -- link back to daily_cement entry
+    NEW.created_by
+  );
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_cement_to_customer_tx ON daily_cement;
+CREATE TRIGGER trg_cement_to_customer_tx
+  AFTER INSERT ON daily_cement
+  FOR EACH ROW
+  EXECUTE FUNCTION sync_cement_to_customer_transaction();
+
+
+-- =====================================================
+-- 2. TRIGGER: daily_cement correction → cascade to customer_transactions
+-- =====================================================
+-- When a daily_cement entry is marked is_corrected = true,
+-- also mark the linked customer_transaction as corrected.
+
+CREATE OR REPLACE FUNCTION cascade_cement_correction_to_customer_tx()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_customer_tx_id UUID;
+  v_new_customer_tx_id UUID;
+BEGIN
+  -- Only fire when is_corrected changes from false to true
+  IF OLD.is_corrected = false AND NEW.is_corrected = true THEN
+
+    -- Find the linked customer_transaction
+    SELECT id INTO v_customer_tx_id
+    FROM customer_transactions
+    WHERE source_id = OLD.id
+      AND source_type IN ('cement', 'steel')
+      AND is_corrected = false
+    LIMIT 1;
+
+    IF v_customer_tx_id IS NOT NULL THEN
+      -- Find the NEW customer_transaction that was created by the correction entry
+      -- (the new daily_cement entry INSERT trigger already created it)
+      IF NEW.corrected_by_entry_id IS NOT NULL THEN
+        SELECT id INTO v_new_customer_tx_id
+        FROM customer_transactions
+        WHERE source_id = NEW.corrected_by_entry_id
+          AND source_type IN ('cement', 'steel')
+          AND is_corrected = false
+        LIMIT 1;
+      END IF;
+
+      -- Mark the old customer_transaction as corrected
+      UPDATE customer_transactions
+      SET is_corrected = true,
+          corrected_by_entry_id = v_new_customer_tx_id,
+          correction_reason = NEW.correction_reason
+      WHERE id = v_customer_tx_id;
+
+      -- Link the new customer_transaction back to the old one
+      IF v_new_customer_tx_id IS NOT NULL THEN
+        UPDATE customer_transactions
+        SET correction_of_id = v_customer_tx_id
+        WHERE id = v_new_customer_tx_id;
+      END IF;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_cement_correction_cascade ON daily_cement;
+CREATE TRIGGER trg_cement_correction_cascade
+  AFTER UPDATE ON daily_cement
+  FOR EACH ROW
+  EXECUTE FUNCTION cascade_cement_correction_to_customer_tx();
+
+
+-- =====================================================
+-- 3. INDEX: Faster lookups on customer_transactions.source_id
+-- =====================================================
+
+CREATE INDEX IF NOT EXISTS idx_customer_tx_source
+  ON customer_transactions(source_type, source_id);
+
+
+-- =====================================================
+-- 4. VIEW: Customer balance summary (for customer list page)
+-- =====================================================
+-- Aggregates total debit, credit, and net balance per customer.
+-- Used by Option A (balance columns on customer list).
+
+CREATE OR REPLACE VIEW customer_balances AS
+SELECT
+  c.id,
+  c.name,
+  c.phone,
+  c.address,
+  c.notes,
+  c.is_active,
+  c.created_at,
+  COALESCE(SUM(ct.debit) FILTER (WHERE ct.is_corrected = false), 0) AS total_debit,
+  COALESCE(SUM(ct.credit) FILTER (WHERE ct.is_corrected = false), 0) AS total_credit,
+  COALESCE(SUM(ct.debit) FILTER (WHERE ct.is_corrected = false), 0)
+    - COALESCE(SUM(ct.credit) FILTER (WHERE ct.is_corrected = false), 0) AS balance
+FROM customers c
+LEFT JOIN customer_transactions ct ON ct.customer_id = c.id
+GROUP BY c.id, c.name, c.phone, c.address, c.notes, c.is_active, c.created_at;
+
+
+-- =====================================================
+-- 5. RPC: Backfill existing daily_cement → customer_transactions
+-- =====================================================
+-- Run this ONCE after deploying the triggers.
+-- Uses date range to avoid heavy queries.
+-- Call: SELECT backfill_customer_transactions('2026-01-01', '2026-04-04');
+
+CREATE OR REPLACE FUNCTION backfill_customer_transactions(
+  p_from_date DATE DEFAULT '2026-01-01',
+  p_to_date DATE DEFAULT CURRENT_DATE
+)
+RETURNS INTEGER AS $$
+DECLARE
+  v_count INTEGER := 0;
+  v_rec RECORD;
+  v_product_name TEXT;
+  v_product_category TEXT;
+  v_total NUMERIC(14,2);
+BEGIN
+  -- Only admins can run backfill
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Unauthorized: only admins can run backfill';
+  END IF;
+
+  FOR v_rec IN
+    SELECT dc.*
+    FROM daily_cement dc
+    WHERE dc.entry_date BETWEEN p_from_date AND p_to_date
+      AND dc.is_corrected = false
+      -- Skip entries that already have a linked customer_transaction
+      AND NOT EXISTS (
+        SELECT 1 FROM customer_transactions ct
+        WHERE ct.source_id = dc.id
+          AND ct.source_type IN ('cement', 'steel')
+          AND ct.is_corrected = false
+      )
+    ORDER BY dc.entry_date, dc.row_number
+  LOOP
+    SELECT name, category INTO v_product_name, v_product_category
+    FROM products WHERE id = v_rec.product_id;
+
+    v_total := v_rec.quantity * v_rec.price_per_ton;
+
+    INSERT INTO customer_transactions (
+      customer_id, entry_date, description,
+      quantity, price, debit, credit,
+      notes, source_type, source_id, created_by
+    ) VALUES (
+      v_rec.customer_id, v_rec.entry_date, v_product_name,
+      v_rec.quantity, v_rec.price_per_ton, v_total, 0,
+      v_rec.notes, v_product_category, v_rec.id, v_rec.created_by
+    );
+
+    v_count := v_count + 1;
+  END LOOP;
+
+  RETURN v_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- =====================================================
+-- 6. RPC: Get customer balance (lightweight single-customer query)
+-- =====================================================
+-- Used by Option D (global search) and Option B (combobox).
+
+CREATE OR REPLACE FUNCTION get_customer_balance(p_customer_id UUID)
+RETURNS TABLE(total_debit NUMERIC, total_credit NUMERIC, balance NUMERIC) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COALESCE(SUM(ct.debit) FILTER (WHERE ct.is_corrected = false), 0) AS total_debit,
+    COALESCE(SUM(ct.credit) FILTER (WHERE ct.is_corrected = false), 0) AS total_credit,
+    COALESCE(SUM(ct.debit) FILTER (WHERE ct.is_corrected = false), 0)
+      - COALESCE(SUM(ct.credit) FILTER (WHERE ct.is_corrected = false), 0) AS balance
+  FROM customer_transactions ct
+  WHERE ct.customer_id = p_customer_id;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+
+
+-- =====================================================
+-- 7. RPC: Search customers with balance (for global search - Option D)
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION search_customers_with_balance(p_search TEXT DEFAULT '')
+RETURNS TABLE(
+  id UUID,
+  name TEXT,
+  phone TEXT,
+  address TEXT,
+  is_active BOOLEAN,
+  total_debit NUMERIC,
+  total_credit NUMERIC,
+  balance NUMERIC
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    c.id,
+    c.name,
+    c.phone,
+    c.address,
+    c.is_active,
+    COALESCE(SUM(ct.debit) FILTER (WHERE ct.is_corrected = false), 0) AS total_debit,
+    COALESCE(SUM(ct.credit) FILTER (WHERE ct.is_corrected = false), 0) AS total_credit,
+    COALESCE(SUM(ct.debit) FILTER (WHERE ct.is_corrected = false), 0)
+      - COALESCE(SUM(ct.credit) FILTER (WHERE ct.is_corrected = false), 0) AS balance
+  FROM customers c
+  LEFT JOIN customer_transactions ct ON ct.customer_id = c.id
+  WHERE c.is_active = true
+    AND (
+      p_search = ''
+      OR c.name ILIKE '%' || p_search || '%'
+      OR c.phone ILIKE '%' || p_search || '%'
+    )
+  GROUP BY c.id, c.name, c.phone, c.address, c.is_active
+  ORDER BY c.name;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\supabase\migration-v6-reservations.sql
+================================================================================
+
+-- =====================================================
+-- Al-Haj Salim - Steel & Cement Accounting System
+-- Database Migration v6 - Customer Reservations (محجوز العملاء)
+-- Run this in Supabase SQL Editor AFTER migration-v5.sql
+-- =====================================================
+-- A reservation is a money-balance ledger between a customer
+-- (account holder) and a related "partner customer" (e.g. family
+-- member or linked client) that handled the operation.
+--   credit → reservation deposit (increases balance)
+--   debit  → withdrawal / delivery (decreases balance)
+-- Display layout: pivot table with one column per partner customer.
+-- =====================================================
+
+
+-- =====================================================
+-- 1. TABLE: customer_reservations
+-- =====================================================
+CREATE TABLE IF NOT EXISTS customer_reservations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id UUID NOT NULL REFERENCES customers(id),
+  partner_customer_id UUID NOT NULL REFERENCES customers(id),
+  product_id UUID REFERENCES products(id),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  description TEXT,
+  credit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  debit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  source_type TEXT,
+  source_id UUID,
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  row_number SERIAL,
+  is_corrected BOOLEAN DEFAULT false,
+  correction_of_id UUID REFERENCES customer_reservations(id),
+  corrected_by_entry_id UUID REFERENCES customer_reservations(id),
+  correction_reason TEXT,
+  CONSTRAINT chk_reservation_amounts CHECK (credit >= 0 AND debit >= 0),
+  CONSTRAINT chk_reservation_one_side CHECK (
+    (credit > 0 AND debit = 0) OR (debit > 0 AND credit = 0)
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_reservations_customer
+  ON customer_reservations(customer_id);
+CREATE INDEX IF NOT EXISTS idx_reservations_partner
+  ON customer_reservations(partner_customer_id);
+CREATE INDEX IF NOT EXISTS idx_reservations_date
+  ON customer_reservations(entry_date);
+CREATE INDEX IF NOT EXISTS idx_reservations_product
+  ON customer_reservations(product_id);
+
+
+-- =====================================================
+-- 2. RLS policies (same pattern as customer_transactions)
+-- =====================================================
+ALTER TABLE customer_reservations ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Read customer_reservations" ON customer_reservations;
+CREATE POLICY "Read customer_reservations" ON customer_reservations
+  FOR SELECT USING (created_by = auth.uid() OR is_admin());
+
+DROP POLICY IF EXISTS "Insert customer_reservations" ON customer_reservations;
+CREATE POLICY "Insert customer_reservations" ON customer_reservations
+  FOR INSERT WITH CHECK (
+    auth.role() = 'authenticated' AND created_by = auth.uid()
+  );
+
+DROP POLICY IF EXISTS "Admin update customer_reservations" ON customer_reservations;
+CREATE POLICY "Admin update customer_reservations" ON customer_reservations
+  FOR UPDATE USING (is_admin());
+
+DROP POLICY IF EXISTS "Admin delete customer_reservations" ON customer_reservations;
+CREATE POLICY "Admin delete customer_reservations" ON customer_reservations
+  FOR DELETE USING (is_admin());
+
+
+-- =====================================================
+-- 3. VIEW: customer_reservation_balances
+-- =====================================================
+-- Per-customer running totals (credit, debit, net balance).
+-- Used to show reservation summary on customer list/detail pages.
+CREATE OR REPLACE VIEW customer_reservation_balances AS
+SELECT
+  c.id AS customer_id,
+  c.name AS customer_name,
+  COALESCE(SUM(r.credit) FILTER (WHERE r.is_corrected = false), 0) AS total_credit,
+  COALESCE(SUM(r.debit)  FILTER (WHERE r.is_corrected = false), 0) AS total_debit,
+  COALESCE(SUM(r.credit) FILTER (WHERE r.is_corrected = false), 0)
+    - COALESCE(SUM(r.debit) FILTER (WHERE r.is_corrected = false), 0) AS balance
+FROM customers c
+LEFT JOIN customer_reservations r ON r.customer_id = c.id
+GROUP BY c.id, c.name;
+
+
+-- =====================================================
+-- 4. RPC: get_customer_reservation_partners
+-- =====================================================
+-- Returns the distinct partner customers that have activity for a given
+-- customer's reservation account, along with their column totals.
+-- Used to render the dynamic pivot columns (e.g. محمد / يوسف).
+CREATE OR REPLACE FUNCTION get_customer_reservation_partners(p_customer_id UUID)
+RETURNS TABLE(
+  partner_customer_id UUID,
+  partner_name TEXT,
+  total_credit NUMERIC,
+  total_debit NUMERIC
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    r.partner_customer_id,
+    c.name AS partner_name,
+    COALESCE(SUM(r.credit) FILTER (WHERE r.is_corrected = false), 0) AS total_credit,
+    COALESCE(SUM(r.debit)  FILTER (WHERE r.is_corrected = false), 0) AS total_debit
+  FROM customer_reservations r
+  JOIN customers c ON c.id = r.partner_customer_id
+  WHERE r.customer_id = p_customer_id
+  GROUP BY r.partner_customer_id, c.name
+  ORDER BY c.name;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+
+
+-- =====================================================
+-- 5. SEED: cement products list (client-provided)
+-- =====================================================
+-- Inserts the 13 cement product types if missing.
+-- Safe to re-run: ON CONFLICT DO NOTHING by (name, category).
+-- Note: existing products with the same name are kept untouched.
+DO $$
+DECLARE
+  product_names TEXT[] := ARRAY[
+    'مقاوم مصريين',
+    'عاده مصريين',
+    'سايب مصريين',
+    'مقاوم تعمير',
+    'عاده ٣٢ تعمير',
+    'تشطيبات',
+    'سايب تعمير',
+    'مقاوم اسيوط',
+    'عاده اسيوط',
+    'مهندس',
+    'الفهد',
+    'سايب اسيوط',
+    'عاده ٤٢ السهم'
+  ];
+  p_name TEXT;
+BEGIN
+  FOREACH p_name IN ARRAY product_names LOOP
+    INSERT INTO products (name, category, unit, is_active)
+    SELECT p_name, 'cement', 'ton', true
+    WHERE NOT EXISTS (
+      SELECT 1 FROM products
+      WHERE name = p_name AND category = 'cement'
+    );
+  END LOOP;
+END $$;
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\supabase\migration-v7-suppliers.sql
+================================================================================
+
+-- =====================================================
+-- Al-Haj Salim - Steel & Cement Accounting System
+-- Database Migration v7 - Suppliers (الموردين)
+-- Run this in Supabase SQL Editor AFTER migration-v6-reservations.sql
+-- =====================================================
+-- Mirrors the customers / customer_transactions feature, but with the
+-- balance sign INVERTED:
+--
+--   Customer balance: positive when customer owes us money (debit > credit).
+--   Supplier balance: positive when supplier owes us money (credit > debit) —
+--                     i.e. when WE have paid more than they delivered.
+--
+--   debit  → goods / invoices delivered by supplier (we owe them more)
+--   credit → payment we sent to supplier (reduces what we owe)
+--
+-- Running balance = SUM(credit) - SUM(debit)
+--   negative → we still owe the supplier
+--   positive → supplier holds our credit
+-- =====================================================
+
+
+-- =====================================================
+-- 1. TABLE: suppliers
+-- =====================================================
+CREATE TABLE IF NOT EXISTS suppliers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  phone TEXT,
+  address TEXT,
+  notes TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_suppliers_active ON suppliers(is_active);
+
+
+-- =====================================================
+-- 2. TABLE: supplier_transactions
+-- =====================================================
+CREATE TABLE IF NOT EXISTS supplier_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  supplier_id UUID NOT NULL REFERENCES suppliers(id),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  description TEXT NOT NULL,
+  quantity NUMERIC(14,3),
+  price NUMERIC(14,2),
+  debit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  credit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  source_type TEXT,             -- 'bank' | 'cash' | 'manual'
+  source_id UUID,               -- bank_id when source_type = 'bank'
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  row_number SERIAL,
+  is_corrected BOOLEAN DEFAULT false,
+  correction_of_id UUID REFERENCES supplier_transactions(id),
+  corrected_by_entry_id UUID REFERENCES supplier_transactions(id),
+  correction_reason TEXT,
+  CONSTRAINT chk_supplier_tx_amounts CHECK (debit >= 0 AND credit >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_tx_supplier
+  ON supplier_transactions(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_tx_date
+  ON supplier_transactions(entry_date);
+CREATE INDEX IF NOT EXISTS idx_supplier_tx_source
+  ON supplier_transactions(source_type, source_id);
+
+
+-- =====================================================
+-- 3. RLS policies (same pattern as customer_transactions)
+-- =====================================================
+ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE supplier_transactions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Read suppliers" ON suppliers;
+CREATE POLICY "Read suppliers" ON suppliers
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Insert suppliers" ON suppliers;
+CREATE POLICY "Insert suppliers" ON suppliers
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Admin update suppliers" ON suppliers;
+CREATE POLICY "Admin update suppliers" ON suppliers
+  FOR UPDATE USING (is_admin());
+
+DROP POLICY IF EXISTS "Admin delete suppliers" ON suppliers;
+CREATE POLICY "Admin delete suppliers" ON suppliers
+  FOR DELETE USING (is_admin());
+
+DROP POLICY IF EXISTS "Read supplier_transactions" ON supplier_transactions;
+CREATE POLICY "Read supplier_transactions" ON supplier_transactions
+  FOR SELECT USING (created_by = auth.uid() OR is_admin());
+
+DROP POLICY IF EXISTS "Insert supplier_transactions" ON supplier_transactions;
+CREATE POLICY "Insert supplier_transactions" ON supplier_transactions
+  FOR INSERT WITH CHECK (
+    auth.role() = 'authenticated' AND created_by = auth.uid()
+  );
+
+DROP POLICY IF EXISTS "Admin update supplier_transactions" ON supplier_transactions;
+CREATE POLICY "Admin update supplier_transactions" ON supplier_transactions
+  FOR UPDATE USING (is_admin());
+
+DROP POLICY IF EXISTS "Admin delete supplier_transactions" ON supplier_transactions;
+CREATE POLICY "Admin delete supplier_transactions" ON supplier_transactions
+  FOR DELETE USING (is_admin());
+
+
+-- =====================================================
+-- 4. VIEW: supplier_balances
+-- =====================================================
+-- Per-supplier totals. NOTE: balance = credit - debit (inverted from
+-- customer_balances). Negative balance → we still owe the supplier.
+CREATE OR REPLACE VIEW supplier_balances AS
+SELECT
+  s.id,
+  s.name,
+  s.phone,
+  s.address,
+  s.notes,
+  s.is_active,
+  s.created_at,
+  COALESCE(SUM(st.debit)  FILTER (WHERE st.is_corrected = false), 0) AS total_debit,
+  COALESCE(SUM(st.credit) FILTER (WHERE st.is_corrected = false), 0) AS total_credit,
+  COALESCE(SUM(st.credit) FILTER (WHERE st.is_corrected = false), 0)
+    - COALESCE(SUM(st.debit) FILTER (WHERE st.is_corrected = false), 0) AS balance
+FROM suppliers s
+LEFT JOIN supplier_transactions st ON st.supplier_id = s.id
+GROUP BY s.id, s.name, s.phone, s.address, s.notes, s.is_active, s.created_at;
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\supabase\migration-v8-cement-redesign.sql
+================================================================================
+
+-- =====================================================
+-- Al-Haj Salim - Steel & Cement Accounting System
+-- Database Migration v8 - Cement-daily redesign
+-- Run this in Supabase SQL Editor AFTER all earlier migrations.
+-- =====================================================
+--
+-- This migration aligns daily_cement with the spreadsheet flow:
+--   - sale price (per ton)             = price_per_ton          (existing)
+--   - transport collected (flat fee)   = transport_in           (NEW)
+--   - transport paid to driver (per ton) = transport_cost      (existing — semantic = "نولون out per ton")
+--   - discount given                   = tanzeel                (NEW)
+--   - bank that received the payment   = bank_id                (NEW, FK → banks)
+--
+-- Recomputed generated columns:
+--   total_amount        = quantity * price_per_ton                       (unchanged)
+--   remaining_balance   = (total_amount + transport_in - tanzeel) - amount_paid
+--   total_profit        = (total_amount + transport_in)
+--                         - (quantity * cost_per_ton)
+--                         - (quantity * transport_cost)
+--                         - tanzeel
+--                       (NULL when cost_per_ton is NULL — admin hasn't entered cost yet)
+--
+-- Triggers updated/added:
+--   sync_cement_to_customer_transaction  — debit now uses (total + transport_in - tanzeel)
+--   sync_cement_to_bank_transaction      — NEW: credits bank_id with amount_paid
+
+BEGIN;
+
+-- =====================================================
+-- 1. New columns
+-- =====================================================
+
+ALTER TABLE daily_cement
+  ADD COLUMN IF NOT EXISTS transport_in NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS tanzeel      NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS bank_id      UUID REFERENCES banks(id);
+
+CREATE INDEX IF NOT EXISTS idx_cement_bank ON daily_cement(bank_id);
+
+-- =====================================================
+-- 2. Drop old generated columns and recreate with new formulas
+-- =====================================================
+-- Postgres requires GENERATED columns to be dropped/recreated to change their formula.
+
+ALTER TABLE daily_cement DROP COLUMN IF EXISTS remaining_balance;
+ALTER TABLE daily_cement DROP COLUMN IF EXISTS profit_per_ton;
+ALTER TABLE daily_cement DROP COLUMN IF EXISTS total_profit;
+
+ALTER TABLE daily_cement
+  ADD COLUMN remaining_balance NUMERIC(14,2) GENERATED ALWAYS AS (
+    (quantity * price_per_ton)
+    + COALESCE(transport_in, 0)
+    - COALESCE(tanzeel, 0)
+    - amount_paid
+  ) STORED;
+
+ALTER TABLE daily_cement
+  ADD COLUMN total_profit NUMERIC(14,2) GENERATED ALWAYS AS (
+    CASE WHEN cost_per_ton IS NULL THEN NULL
+    ELSE
+      (quantity * price_per_ton)
+      + COALESCE(transport_in, 0)
+      - (quantity * cost_per_ton)
+      - (quantity * COALESCE(transport_cost, 0))
+      - COALESCE(tanzeel, 0)
+    END
+  ) STORED;
+
+-- =====================================================
+-- 3. Update customer-debit trigger to use new formula
+-- =====================================================
+-- The customer's debit is what they OWE for the sale:
+--   sale total + transport collected - discount given.
+-- amount_paid is recorded separately on the bank side (trigger #4).
+
+CREATE OR REPLACE FUNCTION sync_cement_to_customer_transaction()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_product_name TEXT;
+  v_product_category TEXT;
+  v_debit NUMERIC(14,2);
+BEGIN
+  IF NEW.is_corrected = true THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT name, category INTO v_product_name, v_product_category
+  FROM products WHERE id = NEW.product_id;
+
+  v_debit := (NEW.quantity * NEW.price_per_ton)
+             + COALESCE(NEW.transport_in, 0)
+             - COALESCE(NEW.tanzeel, 0);
+
+  INSERT INTO customer_transactions (
+    customer_id, entry_date, description, quantity, price,
+    debit, credit, notes, source_type, source_id, created_by
+  ) VALUES (
+    NEW.customer_id,
+    NEW.entry_date,
+    v_product_name,
+    NEW.quantity,
+    NEW.price_per_ton,
+    v_debit,
+    0,
+    NEW.notes,
+    v_product_category,
+    NEW.id,
+    NEW.created_by
+  );
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger itself (DROP + CREATE) was already set up in v5; the function body
+-- above is what changed. The DROP+CREATE here is idempotent for safety.
+DROP TRIGGER IF EXISTS trg_cement_to_customer_tx ON daily_cement;
+CREATE TRIGGER trg_cement_to_customer_tx
+  AFTER INSERT ON daily_cement
+  FOR EACH ROW
+  EXECUTE FUNCTION sync_cement_to_customer_transaction();
+
+-- =====================================================
+-- 4. NEW: bank-credit trigger
+-- =====================================================
+-- When a cement sale is recorded with bank_id and amount_paid > 0,
+-- credit that amount to the bank's ledger automatically.
+-- bank_transactions.credit = money IN to the bank.
+
+CREATE OR REPLACE FUNCTION sync_cement_to_bank_transaction()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_customer_name TEXT;
+  v_product_category TEXT;
+BEGIN
+  IF NEW.is_corrected = true THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.bank_id IS NULL OR NEW.amount_paid IS NULL OR NEW.amount_paid <= 0 THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT name INTO v_customer_name FROM customers WHERE id = NEW.customer_id;
+  SELECT category INTO v_product_category FROM products WHERE id = NEW.product_id;
+
+  INSERT INTO bank_transactions (
+    bank_id, entry_date, description, debit, credit, notes, created_by
+  ) VALUES (
+    NEW.bank_id,
+    NEW.entry_date,
+    CASE
+      WHEN v_product_category = 'cement' THEN 'بيع أسمنت — ' || COALESCE(v_customer_name, '')
+      WHEN v_product_category = 'steel'  THEN 'بيع حديد — '  || COALESCE(v_customer_name, '')
+      ELSE 'دفعة عميل — ' || COALESCE(v_customer_name, '')
+    END,
+    0,
+    NEW.amount_paid,
+    'مولد تلقائياً من daily_cement#' || NEW.id::text,
+    NEW.created_by
+  );
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_cement_to_bank_tx ON daily_cement;
+CREATE TRIGGER trg_cement_to_bank_tx
+  AFTER INSERT ON daily_cement
+  FOR EACH ROW
+  EXECUTE FUNCTION sync_cement_to_bank_transaction();
+
+-- =====================================================
+-- 5. Cascade bank reversal on cement-correction (optional but safer)
+-- =====================================================
+-- If you mark a daily_cement row as is_corrected = true and it had created
+-- a bank_transactions row, also mark that bank row as is_corrected = true.
+
+CREATE OR REPLACE FUNCTION cascade_cement_correction_to_bank_tx()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.is_corrected = false AND NEW.is_corrected = true THEN
+    UPDATE bank_transactions
+    SET is_corrected = true,
+        correction_reason = NEW.correction_reason
+    WHERE notes = 'مولد تلقائياً من daily_cement#' || OLD.id::text
+      AND is_corrected = false;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_cement_correction_to_bank ON daily_cement;
+CREATE TRIGGER trg_cement_correction_to_bank
+  AFTER UPDATE ON daily_cement
+  FOR EACH ROW
+  EXECUTE FUNCTION cascade_cement_correction_to_bank_tx();
+
+COMMIT;
+
+-- =====================================================
+-- Sanity checks (run manually after migration)
+-- =====================================================
+-- 1. Recompute one row to verify the new total_profit formula:
+--   SELECT id, quantity, price_per_ton, transport_in, transport_cost, tanzeel,
+--          cost_per_ton, total_amount, remaining_balance, total_profit
+--   FROM daily_cement ORDER BY created_at DESC LIMIT 5;
+--
+-- 2. Insert a test sale with bank_id + amount_paid and confirm:
+--   - customer_transactions has a debit row with amount = total + transport_in - tanzeel
+--   - bank_transactions has a credit row with amount = amount_paid
+--
+-- 3. Mark that test cement row is_corrected = true and confirm both
+--    customer_transactions and bank_transactions get the cascade flag.
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\supabase\migration.sql
+================================================================================
+
+-- =====================================================
+-- Al-Haj Salim - Steel & Cement Accounting System
+-- Database Migration (v2)
+-- Run this in Supabase SQL Editor
+-- =====================================================
+-- NOTE: If you already ran v1, see migration-update.sql
+-- for incremental changes only.
+-- =====================================================
+
+-- =====================================================
+-- 1. TYPES
+-- =====================================================
+
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('admin', 'cashier');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE correction_status AS ENUM ('pending', 'approved', 'rejected');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+
+-- =====================================================
+-- 2. TABLES
+-- =====================================================
+
+-- Profiles (linked to auth.users)
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  role user_role NOT NULL DEFAULT 'cashier',
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Customers (العملاء)
+CREATE TABLE IF NOT EXISTS customers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  phone TEXT,
+  address TEXT,
+  notes TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Products (المنتجات)
+CREATE TABLE IF NOT EXISTS products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'cement',
+  unit TEXT DEFAULT 'ton',
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Daily Cement (يومية الاسمنت) - Core table
+CREATE TABLE IF NOT EXISTS daily_cement (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  customer_id UUID NOT NULL REFERENCES customers(id),
+  product_id UUID NOT NULL REFERENCES products(id),
+  quantity NUMERIC(10,3) NOT NULL,
+  price_per_ton NUMERIC(12,2) NOT NULL,
+  total_amount NUMERIC(14,2) GENERATED ALWAYS AS (quantity * price_per_ton) STORED,
+  amount_paid NUMERIC(14,2) NOT NULL DEFAULT 0,
+  remaining_balance NUMERIC(14,2) GENERATED ALWAYS AS ((quantity * price_per_ton) - amount_paid) STORED,
+  transport_cost NUMERIC(12,2) DEFAULT 0,
+  notes TEXT,
+
+  -- Profit (admin only)
+  cost_per_ton NUMERIC(12,2),
+  profit_per_ton NUMERIC(12,2) GENERATED ALWAYS AS (
+    CASE WHEN cost_per_ton IS NOT NULL THEN price_per_ton - cost_per_ton ELSE NULL END
+  ) STORED,
+  total_profit NUMERIC(14,2) GENERATED ALWAYS AS (
+    CASE WHEN cost_per_ton IS NOT NULL THEN (price_per_ton - cost_per_ton) * quantity ELSE NULL END
+  ) STORED,
+
+  -- Audit trail (no deletion ever)
+  is_corrected BOOLEAN DEFAULT false,
+  correction_of_id UUID REFERENCES daily_cement(id),
+  corrected_by_entry_id UUID REFERENCES daily_cement(id),
+  correction_reason TEXT,
+
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  row_number SERIAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_cement_date ON daily_cement(entry_date);
+CREATE INDEX IF NOT EXISTS idx_cement_customer ON daily_cement(customer_id);
+CREATE INDEX IF NOT EXISTS idx_cement_created_by ON daily_cement(created_by);
+
+-- Correction Requests (طلبات التصحيح)
+CREATE TABLE IF NOT EXISTS correction_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_id UUID NOT NULL REFERENCES daily_cement(id),
+  proposed_changes JSONB NOT NULL,
+  reason TEXT NOT NULL,
+  status correction_status DEFAULT 'pending',
+  requested_by UUID NOT NULL REFERENCES profiles(id),
+  reviewed_by UUID REFERENCES profiles(id),
+  reviewed_at TIMESTAMPTZ,
+  rejection_reason TEXT,
+  new_entry_id UUID REFERENCES daily_cement(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+
+-- =====================================================
+-- 3. AUTO-CREATE PROFILE ON SIGNUP
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO profiles (id, full_name, role)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
+    'cashier'
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+
+-- =====================================================
+-- 4. HELPER FUNCTIONS
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = (SELECT auth.uid())
+    AND role = 'admin'
+  )
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+
+-- =====================================================
+-- 5. CORRECTION APPROVAL RPC (Atomic Transaction)
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION approve_correction(p_request_id UUID, p_admin_id UUID)
+RETURNS UUID AS $$
+DECLARE
+  v_request correction_requests%ROWTYPE;
+  v_original daily_cement%ROWTYPE;
+  v_new_entry_id UUID;
+  v_changes JSONB;
+BEGIN
+  -- Verify caller is admin
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Unauthorized: only admins can approve corrections';
+  END IF;
+
+  SELECT * INTO v_request FROM correction_requests WHERE id = p_request_id AND status = 'pending';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Correction request not found or already processed';
+  END IF;
+
+  SELECT * INTO v_original FROM daily_cement WHERE id = v_request.entry_id;
+  v_changes := v_request.proposed_changes;
+
+  -- Create new corrected entry
+  INSERT INTO daily_cement (
+    entry_date, customer_id, product_id, quantity, price_per_ton,
+    amount_paid, transport_cost, notes, cost_per_ton,
+    correction_of_id, correction_reason, created_by
+  ) VALUES (
+    v_original.entry_date,
+    COALESCE((v_changes->>'customer_id')::UUID, v_original.customer_id),
+    COALESCE((v_changes->>'product_id')::UUID, v_original.product_id),
+    COALESCE((v_changes->>'quantity')::NUMERIC, v_original.quantity),
+    COALESCE((v_changes->>'price_per_ton')::NUMERIC, v_original.price_per_ton),
+    COALESCE((v_changes->>'amount_paid')::NUMERIC, v_original.amount_paid),
+    COALESCE((v_changes->>'transport_cost')::NUMERIC, v_original.transport_cost),
+    COALESCE(v_changes->>'notes', v_original.notes),
+    v_original.cost_per_ton,
+    v_original.id,
+    v_request.reason,
+    v_original.created_by
+  ) RETURNING id INTO v_new_entry_id;
+
+  -- Mark original as corrected
+  UPDATE daily_cement
+  SET is_corrected = true, corrected_by_entry_id = v_new_entry_id, updated_at = now()
+  WHERE id = v_original.id;
+
+  -- Update the correction request
+  UPDATE correction_requests
+  SET status = 'approved',
+      reviewed_by = p_admin_id,
+      reviewed_at = now(),
+      new_entry_id = v_new_entry_id
+  WHERE id = p_request_id;
+
+  RETURN v_new_entry_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- =====================================================
+-- 6. ROW LEVEL SECURITY
+-- =====================================================
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE daily_cement ENABLE ROW LEVEL SECURITY;
+ALTER TABLE correction_requests ENABLE ROW LEVEL SECURITY;
+
+-- Profiles
+CREATE POLICY "Users read own profile" ON profiles
+  FOR SELECT USING (id = auth.uid() OR is_admin());
+CREATE POLICY "Admin manage profiles" ON profiles
+  FOR ALL USING (is_admin());
+
+-- Customers: all authenticated read, admin manage
+CREATE POLICY "Authenticated read customers" ON customers
+  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin insert customers" ON customers
+  FOR INSERT WITH CHECK (is_admin());
+CREATE POLICY "Admin update customers" ON customers
+  FOR UPDATE USING (is_admin());
+
+-- Products: all authenticated read, admin manage
+CREATE POLICY "Authenticated read products" ON products
+  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin insert products" ON products
+  FOR INSERT WITH CHECK (is_admin());
+CREATE POLICY "Admin update products" ON products
+  FOR UPDATE USING (is_admin());
+
+-- Daily Cement: cashier sees own, admin sees all. NO DELETE POLICY.
+CREATE POLICY "Read cement entries" ON daily_cement
+  FOR SELECT USING (created_by = auth.uid() OR is_admin());
+CREATE POLICY "Insert cement entries" ON daily_cement
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
+CREATE POLICY "Admin update cement entries" ON daily_cement
+  FOR UPDATE USING (is_admin());
+
+-- Correction Requests: own + admin
+CREATE POLICY "Read correction requests" ON correction_requests
+  FOR SELECT USING (requested_by = auth.uid() OR is_admin());
+CREATE POLICY "Insert correction requests" ON correction_requests
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND requested_by = auth.uid());
+CREATE POLICY "Admin update correction requests" ON correction_requests
+  FOR UPDATE USING (is_admin());
+
+
+-- =====================================================
+-- 7. DAILY INVENTORY / جدول البونات (Stock Tracking)
+-- =====================================================
+-- Tracks cement stock per product type per day.
+-- المباع (sold) is computed from daily_cement on the frontend.
+-- الباقي = previous_balance + added - sold (frontend)
+-- تكلفة الرصيد المتبقي = الباقي × cost_price (frontend)
+
+CREATE TABLE IF NOT EXISTS daily_inventory (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  product_id UUID NOT NULL REFERENCES products(id),
+  previous_balance NUMERIC(10,3) NOT NULL DEFAULT 0,
+  added NUMERIC(10,3) NOT NULL DEFAULT 0,
+  cost_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(entry_date, product_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_inventory_date ON daily_inventory(entry_date);
+
+ALTER TABLE daily_inventory ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read inventory" ON daily_inventory
+  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Insert inventory" ON daily_inventory
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
+CREATE POLICY "Update inventory" ON daily_inventory
+  FOR UPDATE USING (created_by = auth.uid() OR is_admin());
+
+
+-- =====================================================
+-- 8. CASH BALANCE TRACKING (رصيد نقدي)
+-- =====================================================
+-- Formula: رصيد نقدي = opening_balance + total_sales - total_deposits
+
+CREATE TABLE IF NOT EXISTS daily_cash_balance (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  balance_date DATE NOT NULL UNIQUE,
+  opening_balance NUMERIC(14,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  updated_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cash_balance_date ON daily_cash_balance(balance_date);
+
+ALTER TABLE daily_cash_balance ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read cash balance" ON daily_cash_balance
+  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin manage cash balance" ON daily_cash_balance
+  FOR ALL USING (is_admin());
+
+
+-- =====================================================
+-- 9. DAILY DEPOSITS / الايداعات
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS daily_deposits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  amount NUMERIC(14,2) NOT NULL,
+  description TEXT,
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  row_number SERIAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_deposits_date ON daily_deposits(entry_date);
+
+ALTER TABLE daily_deposits ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read deposits" ON daily_deposits
+  FOR SELECT USING (created_by = auth.uid() OR is_admin());
+CREATE POLICY "Insert deposits" ON daily_deposits
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
+CREATE POLICY "Admin delete deposits" ON daily_deposits
+  FOR DELETE USING (is_admin());
+
+
+-- =====================================================
+-- 10. CASHIER DAILY LEDGER / يومية الكاشير
+-- =====================================================
+-- MUST balance to zero daily: total عليه = total له
+
+CREATE TABLE IF NOT EXISTS daily_cashier (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  description TEXT NOT NULL,
+  debit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  credit NUMERIC(14,2) NOT NULL DEFAULT 0,
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  row_number SERIAL,
+
+  -- Audit trail (no deletion)
+  is_corrected BOOLEAN DEFAULT false,
+  correction_of_id UUID REFERENCES daily_cashier(id),
+  corrected_by_entry_id UUID REFERENCES daily_cashier(id),
+  correction_reason TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_cashier_date ON daily_cashier(entry_date);
+CREATE INDEX IF NOT EXISTS idx_cashier_created_by ON daily_cashier(created_by);
+
+ALTER TABLE daily_cashier ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Read cashier entries" ON daily_cashier
+  FOR SELECT USING (created_by = auth.uid() OR is_admin());
+CREATE POLICY "Insert cashier entries" ON daily_cashier
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated' AND created_by = auth.uid());
+CREATE POLICY "Admin update cashier entries" ON daily_cashier
+  FOR UPDATE USING (is_admin());
+
+
+-- =====================================================
+-- 11. ENABLE REALTIME
+-- =====================================================
+
+ALTER PUBLICATION supabase_realtime ADD TABLE daily_cement;
+ALTER PUBLICATION supabase_realtime ADD TABLE correction_requests;
+ALTER PUBLICATION supabase_realtime ADD TABLE daily_inventory;
+ALTER PUBLICATION supabase_realtime ADD TABLE daily_deposits;
+ALTER PUBLICATION supabase_realtime ADD TABLE daily_cashier;
+
+
+-- =====================================================
+-- 12. SEED DATA
+-- =====================================================
+
+-- Cement product types (confirmed by accountant)
+INSERT INTO products (name, category, unit) VALUES
+  ('مقاوم مصريين', 'cement', 'ton'),
+  ('عاده مصريين', 'cement', 'ton'),
+  ('سايب مصريين', 'cement', 'ton'),
+  ('مقاوم تعمير', 'cement', 'ton'),
+  ('عاده 32 تعمير', 'cement', 'ton'),
+  ('تشطيبات', 'cement', 'ton'),
+  ('سايب تعمير', 'cement', 'ton'),
+  ('مقاوم اسيوط', 'cement', 'ton'),
+  ('عاده اسيوط', 'cement', 'ton'),
+  ('سايب اسيوط', 'cement', 'ton'),
+  ('مهندس', 'cement', 'ton'),
+  ('الفهد', 'cement', 'ton'),
+  ('عاده 42 السهم', 'cement', 'ton')
+ON CONFLICT DO NOTHING;
+
+-- Steel product types (confirmed by accountant)
+INSERT INTO products (name, category, unit) VALUES
+  ('حديد عز', 'steel', 'ton'),
+  ('حديد جيوشى', 'steel', 'ton'),
+  ('حديد العربيه للصلب', 'steel', 'ton'),
+  ('حديد النوبريه', 'steel', 'ton'),
+  ('حديد المصريين', 'steel', 'ton'),
+  ('حديد عنتر', 'steel', 'ton'),
+  ('حديد المراكبى', 'steel', 'ton'),
+  ('مصر استيل', 'steel', 'ton')
+ON CONFLICT DO NOTHING;
+
+-- Sample customers (from actual data)
+INSERT INTO customers (name, phone) VALUES
+  ('احمد توفيق', NULL),
+  ('اسعد جورج', NULL),
+  ('شركة البدري', NULL),
+  ('اشرف ديروط', NULL),
+  ('حسين كمال', NULL),
+  ('طارق أسيوط الجديد', NULL),
+  ('احمد هيبك', NULL),
+  ('ايمن كمال شكرى', NULL)
+ON CONFLICT DO NOTHING;
+
+
+-- =====================================================
+-- AFTER CREATING USERS IN SUPABASE AUTH DASHBOARD:
+--    Run this to make a user admin:
+--
+--    UPDATE profiles SET role = 'admin' WHERE id = '<user-uuid>';
+-- =====================================================
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\add-deposit-dialog.tsx
+================================================================================
+
+"use client";
+
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  addDepositSchema,
+  type AddDepositFormValues,
+} from "@/lib/validations/cement-daily";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { useAddDeposit } from "@/hooks/use-cement-daily-mutations";
+
+interface AddDepositDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  date: string;
+  userId: string;
+}
+
+export function AddDepositDialog({
+  open,
+  onOpenChange,
+  date,
+  userId,
+}: AddDepositDialogProps) {
+  const addDeposit = useAddDeposit(date);
+
+  const form = useForm<AddDepositFormValues>({
+    resolver: zodResolver(addDepositSchema),
+    defaultValues: {
+      entry_date: date,
+      amount: "0",
+      description: "",
+    },
+  });
+
+  async function onSubmit(values: AddDepositFormValues) {
+    addDeposit.mutate(
+      {
+        entry_date: values.entry_date,
+        amount: Number(values.amount),
+        description: values.description || null,
+        created_by: userId,
+      },
+      {
+        onSuccess: () => {
+          form.reset({ entry_date: date, amount: "0", description: "" });
+          onOpenChange(false);
+        },
+      }
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>إضافة إيداع جديد</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="entry_date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>التاريخ</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} dir="ltr" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>المبلغ</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      {...field}
+                      dir="ltr"
+                      className="text-left"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>التفاصيل</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      placeholder="مثال: توريد بيد عبود"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                إلغاء
+              </Button>
+              <Button type="submit" disabled={addDeposit.isPending}>
+                {addDeposit.isPending ? "جاري الحفظ..." : "حفظ"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\add-entry-dialog.tsx
+================================================================================
+
+"use client";
+
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { formatCurrency } from "@/lib/utils";
+import {
+  addEntrySchema,
+  type AddEntryFormValues,
+} from "@/lib/validations/cement-daily";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { CustomerCombobox } from "@/components/shared/customer-combobox";
+import { ProductSelect } from "@/components/shared/product-select";
+import { useCustomers, useCementProducts } from "@/hooks/use-cement-daily-queries";
+import { useAddCementEntry } from "@/hooks/use-cement-daily-mutations";
+
+interface AddEntryDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  date: string;
+  userId: string;
+  isAdmin: boolean;
+}
+
+export function AddEntryDialog({
+  open,
+  onOpenChange,
+  date,
+  userId,
+  isAdmin,
+}: AddEntryDialogProps) {
+  const { data: customers = [] } = useCustomers();
+  const { data: products = [] } = useCementProducts();
+  const addEntry = useAddCementEntry(date);
+
+  const form = useForm<AddEntryFormValues>({
+    resolver: zodResolver(addEntrySchema),
+    defaultValues: {
+      entry_date: date,
+      customer_id: "",
+      product_id: "",
+      quantity: "0",
+      price_per_ton: "0",
+      amount_paid: "0",
+      transport_cost: "0",
+      driver_name: "",
+      cost_per_ton: "",
+      notes: "",
+    },
+  });
+
+  const quantity = form.watch("quantity") || 0;
+  const pricePerTon = form.watch("price_per_ton") || 0;
+  const amountPaid = form.watch("amount_paid") || 0;
+  const transportCost = form.watch("transport_cost") || 0;
+  const total = Number(quantity) * Number(pricePerTon);
+  const remaining = total - Number(amountPaid);
+  const totalTransport = Number(quantity) * Number(transportCost);
+
+  async function onSubmit(values: AddEntryFormValues) {
+    const insertData: Record<string, unknown> = {
+      entry_date: values.entry_date,
+      customer_id: values.customer_id,
+      product_id: values.product_id,
+      quantity: Number(values.quantity),
+      price_per_ton: Number(values.price_per_ton),
+      amount_paid: Number(values.amount_paid),
+      transport_cost: Number(values.transport_cost),
+      driver_name: values.driver_name || null,
+      notes: values.notes || null,
+      created_by: userId,
+    };
+
+    if (isAdmin && values.cost_per_ton) {
+      insertData.cost_per_ton = Number(values.cost_per_ton);
+    }
+
+    addEntry.mutate(insertData, {
+      onSuccess: () => {
+        form.reset({
+          entry_date: date,
+          customer_id: "",
+          product_id: "",
+          quantity: "0",
+          price_per_ton: "0",
+          amount_paid: "0",
+          transport_cost: "0",
+          driver_name: "",
+          cost_per_ton: "",
+          notes: "",
+        });
+        onOpenChange(false);
+      },
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>إضافة عملية جديدة</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="entry_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>التاريخ</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} dir="ltr" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="customer_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>العميل</FormLabel>
+                    <FormControl>
+                      <CustomerCombobox
+                        customers={customers}
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="product_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>الصنف</FormLabel>
+                    <FormControl>
+                      <ProductSelect
+                        products={products}
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>الكمية (طن)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        {...field}
+                        dir="ltr"
+                        className="text-left"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="price_per_ton"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>سعر الطن</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        {...field}
+                        dir="ltr"
+                        className="text-left"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="space-y-2">
+                <label className="text-sm font-medium">الإجمالي</label>
+                <div className="flex h-9 items-center rounded-md border bg-muted px-3 text-sm font-semibold">
+                  {formatCurrency(total)}
+                </div>
+              </div>
+              <FormField
+                control={form.control}
+                name="amount_paid"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>المدفوع</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        {...field}
+                        dir="ltr"
+                        className="text-left"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="space-y-2">
+                <label className="text-sm font-medium">الباقي</label>
+                <div
+                  className={`flex h-9 items-center rounded-md border bg-muted px-3 text-sm font-semibold ${
+                    remaining > 0 ? "text-destructive" : "text-green-600"
+                  }`}
+                >
+                  {formatCurrency(remaining)}
+                </div>
+              </div>
+              <FormField
+                control={form.control}
+                name="transport_cost"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>النولون</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        {...field}
+                        dir="ltr"
+                        className="text-left"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="space-y-2">
+                <label className="text-sm font-medium">إجمالي النولون</label>
+                <div className="flex h-9 items-center rounded-md border bg-muted px-3 text-sm font-semibold">
+                  {formatCurrency(totalTransport)}
+                </div>
+              </div>
+              <FormField
+                control={form.control}
+                name="driver_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>السائق</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        placeholder="اسم السائق"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {isAdmin && (
+                <FormField
+                  control={form.control}
+                  name="cost_per_ton"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>سعر التكلفة</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          {...field}
+                          value={field.value ?? ""}
+                          dir="ltr"
+                          className="text-left"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ملاحظات</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                إلغاء
+              </Button>
+              <Button type="submit" disabled={addEntry.isPending}>
+                {addEntry.isPending ? "جاري الحفظ..." : "حفظ"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\cash-balance-summary.tsx
+================================================================================
+
+"use client";
+
+import { useMemo } from "react";
+import { Banknote, ArrowDownToLine, Wallet } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
+import { useCementEntries, useDailyDeposits, useDailyCashBalance } from "@/hooks/use-cement-daily-queries";
+
+interface CashBalanceSummaryProps {
+  date: string;
+}
+
+export function CashBalanceSummary({ date }: CashBalanceSummaryProps) {
+  const { data: entries = [] } = useCementEntries(date);
+  const { data: deposits = [] } = useDailyDeposits(date);
+  const { data: cashBalance = null } = useDailyCashBalance(date);
+
+  const summary = useMemo(() => {
+    const activeEntries = entries.filter((e) => !e.is_corrected);
+    const totalSales = activeEntries.reduce(
+      (sum, e) => sum + (e.total_amount ?? 0),
+      0
+    );
+    const totalDeposits = deposits.reduce(
+      (sum, d) => sum + (d.amount ?? 0),
+      0
+    );
+    const openingBalance = cashBalance?.opening_balance ?? 0;
+    const closingBalance = openingBalance + totalSales - totalDeposits;
+
+    return { totalSales, totalDeposits, openingBalance, closingBalance };
+  }, [entries, deposits, cashBalance]);
+
+  return (
+    <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="rounded-lg border bg-card p-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+          <Wallet className="h-4 w-4" />
+          الرصيد الافتتاحي
+        </div>
+        <p className="text-xl font-bold">
+          {formatCurrency(summary.openingBalance)}
+        </p>
+      </div>
+      <div className="rounded-lg border bg-card p-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+          <Banknote className="h-4 w-4" />
+          إجمالي المبيعات
+        </div>
+        <p className="text-xl font-bold text-green-600">
+          {formatCurrency(summary.totalSales)}
+        </p>
+      </div>
+      <div className="rounded-lg border bg-card p-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+          <ArrowDownToLine className="h-4 w-4" />
+          إجمالي الإيداعات
+        </div>
+        <p className="text-xl font-bold text-orange-600">
+          {formatCurrency(summary.totalDeposits)}
+        </p>
+      </div>
+      <div className="rounded-lg border bg-primary/5 border-primary/20 p-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+          <Wallet className="h-4 w-4" />
+          الرصيد النقدي
+        </div>
+        <p className="text-2xl font-bold text-primary">
+          {formatCurrency(summary.closingBalance)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\client-page.tsx
+================================================================================
+
+"use client";
+
+import { useRouter } from "next/navigation";
+import { DataTable } from "./data-table";
+import { DepositsTable } from "./deposits-table";
+import { InventoryTable } from "./inventory-table";
+import { CashBalanceSummary } from "./cash-balance-summary";
+
+interface CementDailyClientProps {
+  initialDate: string;
+}
+
+export function CementDailyClient({ initialDate }: CementDailyClientProps) {
+  const router = useRouter();
+
+  function handleDateChange(date: string) {
+    router.push(`/cement-daily?date=${date}`);
+  }
+
+  return (
+    <>
+      <DataTable
+        initialDate={initialDate}
+        onDateChange={handleDateChange}
+      />
+
+      <DepositsTable date={initialDate} />
+
+      <InventoryTable date={initialDate} />
+
+      <CashBalanceSummary date={initialDate} />
+    </>
+  );
+}
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\columns.tsx
+================================================================================
+
+"use client";
+
+import type { ColumnDef } from "@tanstack/react-table";
+import { ArrowUpDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { TABLE_HEADERS } from "@/lib/constants";
+import { formatCurrency, formatQuantity } from "@/lib/utils";
+import type { DailyCementWithRelations } from "@/types/database";
+
+function SortableHeader({
+  column,
+  label,
+}: {
+  column: { toggleSorting: (desc: boolean) => void; getIsSorted: () => string | false };
+  label: string;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="-ms-3 h-8"
+      onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+    >
+      {label}
+      <ArrowUpDown className="ms-1 h-3 w-3" />
+    </Button>
+  );
+}
+
+export function getBaseColumns(
+  onRequestCorrection: (entry: DailyCementWithRelations) => void
+): ColumnDef<DailyCementWithRelations>[] {
+  return [
+    {
+      accessorKey: "row_number",
+      header: TABLE_HEADERS.rowNum,
+      size: 50,
+      enableSorting: false,
+    },
+    {
+      accessorKey: "customer.name",
+      id: "customer_name",
+      header: ({ column }) => (
+        <SortableHeader column={column} label={TABLE_HEADERS.customer} />
+      ),
+      cell: ({ row }) => row.original.customer?.name ?? "—",
+      size: 150,
+    },
+    {
+      accessorKey: "product.name",
+      id: "product_name",
+      header: TABLE_HEADERS.product,
+      cell: ({ row }) => row.original.product?.name ?? "—",
+      size: 120,
+    },
+    {
+      accessorKey: "quantity",
+      header: ({ column }) => (
+        <SortableHeader column={column} label={TABLE_HEADERS.quantity} />
+      ),
+      cell: ({ getValue }) => formatQuantity(getValue() as number),
+      size: 90,
+    },
+    {
+      accessorKey: "price_per_ton",
+      header: TABLE_HEADERS.pricePerTon,
+      cell: ({ getValue }) => formatCurrency(getValue() as number),
+      size: 110,
+    },
+    {
+      accessorKey: "total_amount",
+      header: ({ column }) => (
+        <SortableHeader column={column} label={TABLE_HEADERS.total} />
+      ),
+      cell: ({ getValue }) => (
+        <span className="font-semibold">
+          {formatCurrency(getValue() as number)}
+        </span>
+      ),
+      size: 120,
+    },
+    {
+      accessorKey: "amount_paid",
+      header: TABLE_HEADERS.amountPaid,
+      cell: ({ getValue }) => formatCurrency(getValue() as number),
+      size: 110,
+    },
+    {
+      accessorKey: "remaining_balance",
+      header: TABLE_HEADERS.remaining,
+      cell: ({ getValue }) => {
+        const val = getValue() as number;
+        return (
+          <span className={val > 0 ? "text-destructive font-medium" : "text-green-600"}>
+            {formatCurrency(val)}
+          </span>
+        );
+      },
+      size: 110,
+    },
+    {
+      accessorKey: "transport_cost",
+      header: TABLE_HEADERS.transportCost,
+      cell: ({ getValue }) => formatCurrency(getValue() as number),
+      size: 100,
+    },
+    {
+      id: "total_transport",
+      header: TABLE_HEADERS.totalTransport,
+      cell: ({ row }) => {
+        const val = (row.original.quantity ?? 0) * (row.original.transport_cost ?? 0);
+        return formatCurrency(val);
+      },
+      size: 120,
+    },
+    {
+      accessorKey: "driver_name",
+      header: TABLE_HEADERS.driver,
+      cell: ({ getValue }) => (getValue() as string | null) ?? "—",
+      size: 100,
+    },
+    {
+      accessorKey: "notes",
+      header: TABLE_HEADERS.notes,
+      cell: ({ getValue }) => {
+        const val = getValue() as string | null;
+        return val ? (
+          <span className="max-w-[150px] truncate block" title={val}>
+            {val}
+          </span>
+        ) : (
+          "—"
+        );
+      },
+      size: 150,
+    },
+    {
+      accessorKey: "creator.full_name",
+      id: "creator_name",
+      header: TABLE_HEADERS.createdBy,
+      cell: ({ row }) => row.original.creator?.full_name ?? "—",
+      size: 100,
+    },
+    {
+      id: "status",
+      header: TABLE_HEADERS.status,
+      cell: ({ row }) => {
+        const entry = row.original;
+        if (entry.is_corrected) {
+          return <Badge variant="destructive">تم التصحيح</Badge>;
+        }
+        if (entry.correction_of_id) {
+          return (
+            <Badge className="bg-green-600 hover:bg-green-700">تصحيح</Badge>
+          );
+        }
+        return null;
+      },
+      size: 90,
+    },
+    {
+      id: "actions",
+      header: TABLE_HEADERS.actions,
+      cell: ({ row }) => {
+        const entry = row.original;
+        if (entry.is_corrected || entry.correction_of_id) return null;
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs"
+            onClick={() => onRequestCorrection(entry)}
+          >
+            طلب تصحيح
+          </Button>
+        );
+      },
+      size: 100,
+    },
+  ];
+}
+
+export function getAdminColumns(): ColumnDef<DailyCementWithRelations>[] {
+  return [
+    {
+      accessorKey: "cost_per_ton",
+      header: TABLE_HEADERS.costPerTon,
+      cell: ({ getValue }) => formatCurrency(getValue() as number | null),
+      size: 110,
+    },
+    {
+      id: "profit_per_ton",
+      header: TABLE_HEADERS.profitPerTon,
+      cell: ({ row }) => {
+        const r = row.original;
+        const val = r.cost_per_ton != null ? r.price_per_ton - r.cost_per_ton : null;
+        return (
+          <span className={val != null && val > 0 ? "text-green-600 font-medium" : ""}>
+            {formatCurrency(val)}
+          </span>
+        );
+      },
+      size: 100,
+    },
+    {
+      accessorKey: "total_profit",
+      header: TABLE_HEADERS.totalProfit,
+      cell: ({ getValue }) => {
+        const val = getValue() as number | null;
+        return (
+          <span className={val != null && val > 0 ? "text-green-600 font-semibold" : ""}>
+            {formatCurrency(val)}
+          </span>
+        );
+      },
+      size: 120,
+    },
+    {
+      id: "profit_loss",
+      header: TABLE_HEADERS.profitLoss,
+      cell: ({ row }) => {
+        const entry = row.original;
+        if (entry.cost_per_ton == null) return "—";
+        const totalCost = (entry.cost_per_ton + entry.transport_cost) * entry.quantity;
+        const totalSelling = entry.price_per_ton * entry.quantity;
+        const profitLoss = totalSelling - totalCost;
+        return (
+          <span className={profitLoss >= 0 ? "text-green-600 font-semibold" : "text-destructive font-semibold"}>
+            {formatCurrency(profitLoss)}
+          </span>
+        );
+      },
+      size: 120,
+    },
+  ];
+}
+
+export function buildColumns(
+  isAdmin: boolean,
+  onRequestCorrection: (entry: DailyCementWithRelations) => void
+): ColumnDef<DailyCementWithRelations>[] {
+  const base = getBaseColumns(onRequestCorrection);
+  if (!isAdmin) return base;
+
+  // Insert admin columns after "remaining_balance" (index 7)
+  const adminCols = getAdminColumns();
+  const insertIndex = base.findIndex((c) => c.id === "status");
+  return [
+    ...base.slice(0, insertIndex),
+    ...adminCols,
+    ...base.slice(insertIndex),
+  ];
+}
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\correction-approval-dialog.tsx
+================================================================================
+
+"use client";
+
+import { useState } from "react";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { MESSAGES } from "@/lib/constants";
+import { formatCurrency, formatQuantity } from "@/lib/utils";
+import { useUser } from "@/hooks/use-user";
+import { safeUpdate } from "@/lib/supabase/safe-fetch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import type { CorrectionRequestWithRelations } from "@/types/database";
+
+interface CorrectionApprovalDialogProps {
+  request: CorrectionRequestWithRelations | null;
+  onClose: () => void;
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  customer_id: "العميل",
+  product_id: "الصنف",
+  quantity: "الكمية",
+  price_per_ton: "سعر الطن",
+  amount_paid: "المدفوع",
+  transport_cost: "النولون",
+  notes: "ملاحظات",
+};
+
+export function CorrectionApprovalDialog({
+  request,
+  onClose,
+}: CorrectionApprovalDialogProps) {
+  const router = useRouter();
+  const { userId } = useUser();
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleApprove() {
+    if (!request) return;
+    if (userId === "offline") {
+      toast.error("خطأ: لم يتم تحميل بيانات المستخدم بعد — أعد المحاولة");
+      return;
+    }
+    setLoading(true);
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("approve_correction", {
+      p_request_id: request.id,
+      p_admin_id: userId,
+    });
+
+    if (error) {
+      toast.error(MESSAGES.error);
+      setLoading(false);
+      return;
+    }
+
+    toast.success(MESSAGES.correctionApproved);
+    setLoading(false);
+    onClose();
+    router.refresh();
+  }
+
+  async function handleReject() {
+    if (!request) return;
+    if (!rejectionReason.trim()) {
+      toast.error("يرجى إدخال سبب الرفض");
+      return;
+    }
+    setLoading(true);
+
+    const { error } = await safeUpdate("correction_requests", {
+      status: "rejected",
+      reviewed_by: userId,
+      reviewed_at: new Date().toISOString(),
+      rejection_reason: rejectionReason,
+    }, { id: request.id });
+
+    if (error) {
+      toast.error(MESSAGES.error);
+      setLoading(false);
+      return;
+    }
+
+    toast.success(MESSAGES.correctionRejected);
+    setLoading(false);
+    onClose();
+    router.refresh();
+  }
+
+  if (!request) return null;
+
+  const entry = request.entry;
+  const changes = request.proposed_changes as Record<string, unknown>;
+
+  function getOriginalValue(field: string): string {
+    const val = entry[field as keyof typeof entry];
+    if (typeof val === "number") {
+      return field === "quantity"
+        ? formatQuantity(val)
+        : formatCurrency(val);
+    }
+    return String(val ?? "—");
+  }
+
+  function getNewValue(field: string): string {
+    const val = changes[field];
+    if (typeof val === "number") {
+      return field === "quantity"
+        ? formatQuantity(val)
+        : formatCurrency(val);
+    }
+    return String(val ?? "—");
+  }
+
+  return (
+    <Dialog open={!!request} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>مراجعة طلب التصحيح</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-md border p-3 bg-muted/30">
+            <p className="text-sm">
+              <span className="font-medium">طلب بواسطة:</span>{" "}
+              {request.requester.full_name}
+            </p>
+            <p className="text-sm">
+              <span className="font-medium">العميل:</span>{" "}
+              {entry.customer?.name}
+            </p>
+            <p className="text-sm mt-1">
+              <span className="font-medium">السبب:</span> {request.reason}
+            </p>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold">التغييرات المقترحة:</h4>
+            <div className="space-y-2">
+              {Object.keys(changes).map((field) => (
+                <div
+                  key={field}
+                  className="flex items-center gap-3 rounded-md border p-2 text-sm"
+                >
+                  <span className="font-medium min-w-[80px]">
+                    {FIELD_LABELS[field] ?? field}
+                  </span>
+                  <Badge variant="outline" className="text-destructive">
+                    {getOriginalValue(field)}
+                  </Badge>
+                  <span>←</span>
+                  <Badge className="bg-green-600">
+                    {getNewValue(field)}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-2">
+            <Label>سبب الرفض (مطلوب في حالة الرفض)</Label>
+            <Textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="اكتب سبب الرفض..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={onClose} disabled={loading}>
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleReject}
+              disabled={loading}
+            >
+              رفض
+            </Button>
+            <Button onClick={handleApprove} disabled={loading}>
+              {loading ? "جاري المعالجة..." : "موافقة"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\correction-request-dialog.tsx
+================================================================================
+
+"use client";
+
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useUser } from "@/hooks/use-user";
+import { useCustomers, useCementProducts } from "@/hooks/use-cement-daily-queries";
+import { useRequestCorrection } from "@/hooks/use-cement-daily-mutations";
+import {
+  correctionRequestSchema,
+  type CorrectionRequestFormValues,
+} from "@/lib/validations/cement-daily";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { CustomerCombobox } from "@/components/shared/customer-combobox";
+import { ProductSelect } from "@/components/shared/product-select";
+import type { DailyCementWithRelations } from "@/types/database";
+import { toast } from "sonner";
+
+interface CorrectionRequestDialogProps {
+  entry: DailyCementWithRelations | null;
+  onClose: () => void;
+}
+
+export function CorrectionRequestDialog({
+  entry,
+  onClose,
+}: CorrectionRequestDialogProps) {
+  const { userId } = useUser();
+  const { data: customers = [] } = useCustomers();
+  const { data: products = [] } = useCementProducts();
+  const requestCorrection = useRequestCorrection();
+
+  const form = useForm<CorrectionRequestFormValues>({
+    resolver: zodResolver(correctionRequestSchema),
+    values: entry
+      ? {
+          reason: "",
+          customer_id: entry.customer_id,
+          product_id: entry.product_id,
+          quantity: String(entry.quantity),
+          price_per_ton: String(entry.price_per_ton),
+          amount_paid: String(entry.amount_paid),
+          transport_cost: String(entry.transport_cost),
+          driver_name: entry.driver_name ?? "",
+          notes: entry.notes ?? "",
+        }
+      : undefined,
+  });
+
+  async function onSubmit(values: CorrectionRequestFormValues) {
+    if (!entry) return;
+
+    const { reason, ...proposed } = values;
+    const proposedChanges: Record<string, unknown> = {};
+
+    if (proposed.customer_id !== entry.customer_id)
+      proposedChanges.customer_id = proposed.customer_id;
+    if (proposed.product_id !== entry.product_id)
+      proposedChanges.product_id = proposed.product_id;
+    if (Number(proposed.quantity) !== entry.quantity)
+      proposedChanges.quantity = Number(proposed.quantity);
+    if (Number(proposed.price_per_ton) !== entry.price_per_ton)
+      proposedChanges.price_per_ton = Number(proposed.price_per_ton);
+    if (Number(proposed.amount_paid) !== entry.amount_paid)
+      proposedChanges.amount_paid = Number(proposed.amount_paid);
+    if (Number(proposed.transport_cost) !== entry.transport_cost)
+      proposedChanges.transport_cost = Number(proposed.transport_cost);
+    if ((proposed.driver_name ?? "") !== (entry.driver_name ?? ""))
+      proposedChanges.driver_name = proposed.driver_name || null;
+    if ((proposed.notes ?? "") !== (entry.notes ?? ""))
+      proposedChanges.notes = proposed.notes;
+
+    if (Object.keys(proposedChanges).length === 0) {
+      toast.error("لم يتم تغيير أي قيمة");
+      return;
+    }
+
+    requestCorrection.mutate(
+      {
+        entry_id: entry.id,
+        proposed_changes: proposedChanges,
+        reason,
+        requested_by: userId,
+      },
+      {
+        onSuccess: () => {
+          onClose();
+        },
+      }
+    );
+  }
+
+  return (
+    <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>طلب تصحيح عملية</DialogTitle>
+        </DialogHeader>
+        {entry && (
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="reason"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>سبب التصحيح *</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="اكتب سبب التصحيح (10 أحرف على الأقل)..."
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="customer_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>العميل</FormLabel>
+                      <FormControl>
+                        <CustomerCombobox
+                          customers={customers}
+                          value={field.value}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="product_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>الصنف</FormLabel>
+                      <FormControl>
+                        <ProductSelect
+                          products={products}
+                          value={field.value}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="quantity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>الكمية (طن)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.001" min="0" {...field} dir="ltr" className="text-left" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="price_per_ton"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>سعر الطن</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="amount_paid"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>المدفوع</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="transport_cost"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>النولون</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" min="0" {...field} dir="ltr" className="text-left" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="driver_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>السائق</FormLabel>
+                      <FormControl>
+                        <Input type="text" placeholder="اسم السائق" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ملاحظات</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={onClose}>
+                  إلغاء
+                </Button>
+                <Button type="submit" disabled={requestCorrection.isPending}>
+                  {requestCorrection.isPending
+                    ? "جاري الإرسال..."
+                    : "إرسال طلب التصحيح"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\data-table-toolbar.tsx
+================================================================================
+
+"use client";
+
+import { CalendarIcon, Plus, Printer } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { formatDate } from "@/lib/utils";
+
+interface DataTableToolbarProps {
+  date: string;
+  onDateChange: (date: string) => void;
+  onAddEntry: () => void;
+  onPrint: () => void;
+  customerFilter: string;
+  onCustomerFilterChange: (value: string) => void;
+}
+
+export function DataTableToolbar({
+  date,
+  onDateChange,
+  onAddEntry,
+  onPrint,
+  customerFilter,
+  onCustomerFilterChange,
+}: DataTableToolbarProps) {
+  return (
+    <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="gap-2 shrink-0">
+              <CalendarIcon className="h-4 w-4" />
+              {formatDate(date)}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={new Date(date)}
+              onSelect={(d) => {
+                if (d) {
+                  const iso = d.toISOString().split("T")[0];
+                  onDateChange(iso);
+                }
+              }}
+            />
+          </PopoverContent>
+        </Popover>
+        <Input
+          placeholder="بحث بالعميل..."
+          value={customerFilter}
+          onChange={(e) => onCustomerFilterChange(e.target.value)}
+          className="flex-1 sm:max-w-[200px]"
+        />
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <Button variant="outline" size="sm" className="gap-2" onClick={onPrint}>
+          <Printer className="h-4 w-4" />
+          <span className="hidden sm:inline">طباعة</span>
+        </Button>
+        <Button className="gap-2" onClick={onAddEntry}>
+          <Plus className="h-4 w-4" />
+          إضافة عملية
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\data-table.tsx
+================================================================================
+
+"use client";
+
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type SortingState,
+} from "@tanstack/react-table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DevMockBanner } from "@/components/dev-mock-banner";
+import { cn, formatCurrency, formatQuantity, todayISO } from "@/lib/utils";
+import { useUser } from "@/hooks/use-user";
+import { useCementEntries, useCustomers, useCementProducts } from "@/hooks/use-cement-daily-queries";
+import { useRealtimeCementRQ } from "@/hooks/use-cement-daily-realtime";
+import { buildColumns } from "./columns";
+import { DataTableToolbar } from "./data-table-toolbar";
+import { AddEntryDialog } from "./add-entry-dialog";
+import { CorrectionRequestDialog } from "./correction-request-dialog";
+import type { DailyCementWithRelations } from "@/types/database";
+import { APP_FULL_NAME } from "@/lib/constants";
+import { IS_DEV_MOCK_ENABLED, isMockId, mockCementEntries } from "@/lib/dev-mocks";
+import { Loader2 } from "lucide-react";
+
+interface DataTableProps {
+  initialDate: string;
+  onDateChange: (date: string) => void;
+}
+
+export function DataTable({
+  initialDate,
+  onDateChange,
+}: DataTableProps) {
+  const { isAdmin, userId } = useUser();
+  const { data: realData = [], isLoading } = useCementEntries(initialDate);
+  const { data: products = [] } = useCementProducts();
+  const { data: customers = [] } = useCustomers();
+
+  // Dev-only: fall back to mock data when the day has no real entries
+  // so all features (correction pair, totals, admin profit) are visible.
+  const data = useMemo(() => {
+    if (realData.length > 0) return realData;
+    if (!IS_DEV_MOCK_ENABLED) return realData;
+    return mockCementEntries(initialDate, products, customers, userId);
+  }, [realData, initialDate, products, customers, userId]);
+  const isUsingMock = data !== realData && data.length > 0;
+
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [customerFilter, setCustomerFilter] = useState("");
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+
+  const [correctionEntry, setCorrectionEntry] =
+    useState<DailyCementWithRelations | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+
+  useRealtimeCementRQ(initialDate);
+
+  const handleRequestCorrection = useCallback(
+    (entry: DailyCementWithRelations) => {
+      if (isMockId(entry.id)) return; // no-op on dev mock rows
+      setCorrectionEntry(entry);
+    },
+    []
+  );
+
+  const columns = useMemo(
+    () => buildColumns(isAdmin, handleRequestCorrection),
+    [isAdmin, handleRequestCorrection]
+  );
+
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    onSortingChange: setSorting,
+    state: {
+      sorting,
+      globalFilter: customerFilter,
+    },
+    onGlobalFilterChange: setCustomerFilter,
+    globalFilterFn: (row, _columnId, filterValue) => {
+      const customerName = row.original.customer?.name ?? "";
+      return customerName.includes(filterValue);
+    },
+  });
+
+  const totals = useMemo(() => {
+    const rows = table.getFilteredRowModel().rows;
+    const activeRows = rows.filter((r) => !r.original.is_corrected);
+    return {
+      totalAmount: activeRows.reduce((s, r) => s + (r.original.total_amount ?? 0), 0),
+      amountPaid: activeRows.reduce((s, r) => s + (r.original.amount_paid ?? 0), 0),
+      remaining: activeRows.reduce((s, r) => s + (r.original.remaining_balance ?? 0), 0),
+      transport: activeRows.reduce((s, r) => s + (r.original.transport_cost ?? 0), 0),
+      totalTransport: activeRows.reduce((s, r) => s + ((r.original.quantity ?? 0) * (r.original.transport_cost ?? 0)), 0),
+      totalProfit: isAdmin
+        ? activeRows.reduce((s, r) => s + (r.original.total_profit ?? 0), 0)
+        : null,
+      profitLoss: isAdmin
+        ? activeRows.reduce((s, r) => {
+            if (r.original.cost_per_ton == null) return s;
+            const totalCost = (r.original.cost_per_ton + r.original.transport_cost) * r.original.quantity;
+            const totalSelling = r.original.price_per_ton * r.original.quantity;
+            return s + (totalSelling - totalCost);
+          }, 0)
+        : null,
+    };
+  }, [table, isAdmin]);
+
+  function handlePrint() {
+    const printContent = printRef.current;
+    if (!printContent) return;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <title>يومية الاسمنت - ${initialDate}</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+          body { font-family: 'Cairo', sans-serif; padding: 20px; }
+          h1 { text-align: center; font-size: 18px; margin-bottom: 4px; }
+          h2 { text-align: center; font-size: 14px; color: #666; margin-bottom: 16px; }
+          table { width: 100%; border-collapse: collapse; font-size: 12px; }
+          th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: right; }
+          th { background: #f5f5f5; font-weight: 600; }
+          .corrected { text-decoration: line-through; opacity: 0.5; }
+          .correction { background: #f0fdf4; }
+          .totals { font-weight: 700; background: #fafafa; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <h1>${APP_FULL_NAME}</h1>
+        <h2>يومية الاسمنت - ${initialDate}</h2>
+        ${printContent.innerHTML}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {isUsingMock && <DevMockBanner label="يومية تجريبية" />}
+      <DataTableToolbar
+        date={initialDate}
+        onDateChange={onDateChange}
+        onAddEntry={() => setAddDialogOpen(true)}
+        onPrint={handlePrint}
+        customerFilter={customerFilter}
+        onCustomerFilterChange={setCustomerFilter}
+      />
+
+      <div ref={printRef}>
+        <div className="hidden md:block rounded-md border overflow-x-auto">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id} className="text-start whitespace-nowrap">
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className={cn(
+                      row.original.is_corrected &&
+                        "line-through opacity-50 bg-red-50",
+                      row.original.correction_of_id &&
+                        !row.original.is_corrected &&
+                        "bg-green-50",
+                    )}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="whitespace-nowrap">
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center text-muted-foreground"
+                  >
+                    لا توجد عمليات لهذا اليوم
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+            {table.getRowModel().rows?.length > 0 && (
+              <TableFooter>
+                <TableRow className="font-bold bg-muted/50">
+                  <TableCell colSpan={5} className="text-start">
+                    الإجمالي
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {formatCurrency(totals.totalAmount)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {formatCurrency(totals.amountPaid)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-destructive">
+                    {formatCurrency(totals.remaining)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {formatCurrency(totals.transport)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {formatCurrency(totals.totalTransport)}
+                  </TableCell>
+                  <TableCell />
+                  {isAdmin && (
+                    <>
+                      <TableCell />
+                      <TableCell />
+                      <TableCell />
+                      <TableCell className="whitespace-nowrap text-green-600">
+                        {formatCurrency(totals.totalProfit)}
+                      </TableCell>
+                      <TableCell className={`whitespace-nowrap font-semibold ${(totals.profitLoss ?? 0) >= 0 ? "text-green-600" : "text-destructive"}`}>
+                        {formatCurrency(totals.profitLoss)}
+                      </TableCell>
+                    </>
+                  )}
+                  <TableCell
+                    colSpan={isAdmin ? 2 : 3}
+                  />
+                </TableRow>
+              </TableFooter>
+            )}
+          </Table>
+        </div>
+
+        {/* Mobile card view */}
+        <div className="md:hidden space-y-3">
+          {table.getRowModel().rows?.length ? (
+            <>
+              {table.getRowModel().rows.map((row) => {
+                const entry = row.original;
+                const totalTransport = (entry.quantity ?? 0) * (entry.transport_cost ?? 0);
+                const profitLoss =
+                  isAdmin && entry.cost_per_ton != null
+                    ? entry.price_per_ton * entry.quantity -
+                      (entry.cost_per_ton + entry.transport_cost) * entry.quantity
+                    : null;
+                return (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      "rounded-lg border p-3 space-y-2 text-sm",
+                      entry.is_corrected && "line-through opacity-50 bg-red-50",
+                      entry.correction_of_id && !entry.is_corrected && "bg-green-50",
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            #{entry.row_number}
+                          </span>
+                          <span className="font-semibold truncate">
+                            {entry.customer?.name ?? "—"}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {entry.product?.name ?? "—"} · {formatQuantity(entry.quantity)}
+                        </div>
+                      </div>
+                      {entry.is_corrected ? (
+                        <Badge variant="destructive" className="shrink-0">
+                          تم التصحيح
+                        </Badge>
+                      ) : entry.correction_of_id ? (
+                        <Badge className="bg-green-600 hover:bg-green-700 shrink-0">
+                          تصحيح
+                        </Badge>
+                      ) : null}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">الإجمالي</div>
+                        <div className="font-bold">
+                          {formatCurrency(entry.total_amount)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">المدفوع</div>
+                        <div>{formatCurrency(entry.amount_paid)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">المتبقي</div>
+                        <div
+                          className={
+                            entry.remaining_balance > 0
+                              ? "text-destructive font-medium"
+                              : "text-green-600"
+                          }
+                        >
+                          {formatCurrency(entry.remaining_balance)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">
+                          سعر الطن
+                        </div>
+                        <div>{formatCurrency(entry.price_per_ton)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">
+                          نقل الطن
+                        </div>
+                        <div>{formatCurrency(entry.transport_cost)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">
+                          إجمالي النقل
+                        </div>
+                        <div>{formatCurrency(totalTransport)}</div>
+                      </div>
+                      {isAdmin && entry.total_profit != null && (
+                        <>
+                          <div>
+                            <div className="text-[10px] text-muted-foreground">
+                              إجمالي الربح
+                            </div>
+                            <div className="text-green-600 font-semibold">
+                              {formatCurrency(entry.total_profit)}
+                            </div>
+                          </div>
+                          {profitLoss != null && (
+                            <div>
+                              <div className="text-[10px] text-muted-foreground">
+                                الربح/الخسارة
+                              </div>
+                              <div
+                                className={
+                                  profitLoss >= 0
+                                    ? "text-green-600 font-semibold"
+                                    : "text-destructive font-semibold"
+                                }
+                              >
+                                {formatCurrency(profitLoss)}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {(entry.driver_name || entry.notes) && (
+                      <div className="pt-2 border-t space-y-1">
+                        {entry.driver_name && (
+                          <div className="text-xs">
+                            <span className="text-muted-foreground">السائق: </span>
+                            {entry.driver_name}
+                          </div>
+                        )}
+                        {entry.notes && (
+                          <div className="text-xs">
+                            <span className="text-muted-foreground">ملاحظات: </span>
+                            {entry.notes}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {!entry.is_corrected && !entry.correction_of_id && (
+                      <div className="pt-2 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full text-xs"
+                          onClick={() => handleRequestCorrection(entry)}
+                        >
+                          طلب تصحيح
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Mobile totals card */}
+              <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+                <div className="font-bold text-sm">الإجمالي</div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">المبيعات</div>
+                    <div className="font-bold">
+                      {formatCurrency(totals.totalAmount)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">المدفوع</div>
+                    <div className="font-bold">
+                      {formatCurrency(totals.amountPaid)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">المتبقي</div>
+                    <div className="font-bold text-destructive">
+                      {formatCurrency(totals.remaining)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">
+                      إجمالي النقل
+                    </div>
+                    <div className="font-bold">
+                      {formatCurrency(totals.totalTransport)}
+                    </div>
+                  </div>
+                  {isAdmin && totals.totalProfit != null && (
+                    <>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">
+                          الربح
+                        </div>
+                        <div className="font-bold text-green-600">
+                          {formatCurrency(totals.totalProfit)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">
+                          الربح/الخسارة
+                        </div>
+                        <div
+                          className={cn(
+                            "font-bold",
+                            (totals.profitLoss ?? 0) >= 0
+                              ? "text-green-600"
+                              : "text-destructive",
+                          )}
+                        >
+                          {formatCurrency(totals.profitLoss)}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-lg border h-24 flex items-center justify-center text-muted-foreground text-sm">
+              لا توجد عمليات لهذا اليوم
+            </div>
+          )}
+        </div>
+      </div>
+
+      <AddEntryDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        date={initialDate}
+        userId={userId}
+        isAdmin={isAdmin}
+      />
+
+      <CorrectionRequestDialog
+        entry={correctionEntry}
+        onClose={() => setCorrectionEntry(null)}
+      />
+    </>
+  );
+}
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\deposits-table.tsx
+================================================================================
+
+"use client";
+
+import { useMemo, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { DEPOSIT_TABLE_HEADERS } from "@/lib/constants";
+import { formatCurrency } from "@/lib/utils";
+import { DevMockBanner } from "@/components/dev-mock-banner";
+import { useUser } from "@/hooks/use-user";
+import { useDailyDeposits } from "@/hooks/use-cement-daily-queries";
+import { useDeleteDeposit } from "@/hooks/use-cement-daily-mutations";
+import { useRealtimeDepositsRQ } from "@/hooks/use-cement-daily-realtime";
+import { IS_DEV_MOCK_ENABLED, isMockId, mockDeposits } from "@/lib/dev-mocks";
+import { AddDepositDialog } from "./add-deposit-dialog";
+
+interface DepositsTableProps {
+  date: string;
+}
+
+export function DepositsTable({ date }: DepositsTableProps) {
+  const { isAdmin, userId } = useUser();
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const { data: realData = [] } = useDailyDeposits(date);
+  const deleteDeposit = useDeleteDeposit(date);
+
+  useRealtimeDepositsRQ(date);
+
+  const data = useMemo(() => {
+    if (realData.length > 0) return realData;
+    if (!IS_DEV_MOCK_ENABLED) return realData;
+    return mockDeposits(date, userId);
+  }, [realData, date, userId]);
+  const isUsingMock = data !== realData && data.length > 0;
+
+  const totalDeposits = useMemo(
+    () => data.reduce((sum, d) => sum + (d.amount ?? 0), 0),
+    [data]
+  );
+
+  return (
+    <div className="mt-8">
+      {isUsingMock && <DevMockBanner label="إيداعات تجريبية" />}
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-lg font-semibold">الايداعات</h3>
+        <Button
+          size="sm"
+          className="gap-2"
+          onClick={() => setAddDialogOpen(true)}
+        >
+          <Plus className="h-4 w-4" />
+          إضافة إيداع
+        </Button>
+      </div>
+
+      <div className="hidden md:block rounded-md border overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-start w-[50px]">
+                {DEPOSIT_TABLE_HEADERS.rowNum}
+              </TableHead>
+              <TableHead className="text-start">
+                {DEPOSIT_TABLE_HEADERS.amount}
+              </TableHead>
+              <TableHead className="text-start">
+                {DEPOSIT_TABLE_HEADERS.description}
+              </TableHead>
+              <TableHead className="text-start">
+                {DEPOSIT_TABLE_HEADERS.createdBy}
+              </TableHead>
+              {isAdmin && (
+                <TableHead className="text-start">
+                  {DEPOSIT_TABLE_HEADERS.actions}
+                </TableHead>
+              )}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.length ? (
+              data.map((deposit, index) => (
+                <TableRow key={deposit.id}>
+                  <TableCell>{index + 1}</TableCell>
+                  <TableCell className="font-semibold">
+                    {formatCurrency(deposit.amount)}
+                  </TableCell>
+                  <TableCell>{deposit.description ?? "—"}</TableCell>
+                  <TableCell>{deposit.creator?.full_name ?? "—"}</TableCell>
+                  {isAdmin && (
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        disabled={isMockId(deposit.id)}
+                        onClick={() => !isMockId(deposit.id) && deleteDeposit.mutate(deposit.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={isAdmin ? 5 : 4}
+                  className="h-16 text-center text-muted-foreground"
+                >
+                  لا توجد إيداعات لهذا اليوم
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+          {data.length > 0 && (
+            <TableFooter>
+              <TableRow className="font-bold bg-muted/50">
+                <TableCell className="text-start">الإجمالي</TableCell>
+                <TableCell className="font-bold">
+                  {formatCurrency(totalDeposits)}
+                </TableCell>
+                <TableCell colSpan={isAdmin ? 3 : 2} />
+              </TableRow>
+            </TableFooter>
+          )}
+        </Table>
+      </div>
+
+      {/* Mobile card view */}
+      <div className="md:hidden space-y-3">
+        {data.length ? (
+          <>
+            {data.map((deposit, index) => (
+              <div
+                key={deposit.id}
+                className="rounded-lg border p-3 flex items-start justify-between gap-2"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      #{index + 1}
+                    </span>
+                    <span className="font-bold text-base">
+                      {formatCurrency(deposit.amount)}
+                    </span>
+                  </div>
+                  {deposit.description && (
+                    <div className="text-sm mt-1">{deposit.description}</div>
+                  )}
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {deposit.creator?.full_name ?? "—"}
+                  </div>
+                </div>
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive shrink-0"
+                    disabled={isMockId(deposit.id)}
+                    onClick={() => !isMockId(deposit.id) && deleteDeposit.mutate(deposit.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <div className="rounded-lg border bg-muted/50 p-3 flex items-center justify-between">
+              <span className="font-bold text-sm">الإجمالي</span>
+              <span className="font-bold">{formatCurrency(totalDeposits)}</span>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-lg border h-16 flex items-center justify-center text-muted-foreground text-sm">
+            لا توجد إيداعات لهذا اليوم
+          </div>
+        )}
+      </div>
+
+      <AddDepositDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        date={date}
+        userId={userId}
+      />
+    </div>
+  );
+}
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\inventory-table.tsx
+================================================================================
+
+"use client";
+
+import { useMemo, useState } from "react";
+import { Save } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { INVENTORY_TABLE_HEADERS } from "@/lib/constants";
+import { formatCurrency, formatQuantity } from "@/lib/utils";
+import { DevMockBanner } from "@/components/dev-mock-banner";
+import { useUser } from "@/hooks/use-user";
+import { useDailyInventory, useCementProducts, useCementEntries, useCustomers } from "@/hooks/use-cement-daily-queries";
+import { useUpsertInventory } from "@/hooks/use-cement-daily-mutations";
+import { useRealtimeInventoryRQ } from "@/hooks/use-cement-daily-realtime";
+import { IS_DEV_MOCK_ENABLED, mockInventory, mockCementEntries } from "@/lib/dev-mocks";
+
+interface InventoryTableProps {
+  date: string;
+  category?: "cement" | "steel";
+}
+
+export function InventoryTable({ date, category = "cement" }: InventoryTableProps) {
+  const { isAdmin, userId } = useUser();
+  const { data: realInventory = [] } = useDailyInventory(date);
+  const { data: products = [] } = useCementProducts(category);
+  const { data: realEntries = [] } = useCementEntries(date);
+  const { data: customers = [] } = useCustomers();
+  const upsertInventory = useUpsertInventory(date);
+
+  useRealtimeInventoryRQ(date);
+
+  // Dev-only: fallback to mock inventory + mock sales so the جدول البونات
+  // shows realistic previous/added/sold/cost values
+  const inventory = useMemo(() => {
+    if (realInventory.length > 0) return realInventory;
+    if (!IS_DEV_MOCK_ENABLED) return realInventory;
+    return mockInventory(date, products, userId);
+  }, [realInventory, date, products, userId]);
+
+  const entries = useMemo(() => {
+    if (realEntries.length > 0) return realEntries;
+    if (!IS_DEV_MOCK_ENABLED) return realEntries;
+    return mockCementEntries(date, products, customers, userId);
+  }, [realEntries, date, products, customers, userId]);
+
+  const isUsingMock =
+    (inventory !== realInventory && inventory.length > 0) ||
+    (entries !== realEntries && entries.length > 0);
+
+  const soldByProduct = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const entry of entries) {
+      if (!entry.is_corrected) {
+        map[entry.product_id] =
+          (map[entry.product_id] || 0) + entry.quantity;
+      }
+    }
+    return map;
+  }, [entries]);
+
+  const rows = useMemo(() => {
+    return products.map((product) => {
+      const inv = inventory.find((i) => i.product_id === product.id);
+      const previous_balance = inv?.previous_balance ?? 0;
+      const added = inv?.added ?? 0;
+      const sold = soldByProduct[product.id] ?? 0;
+      const net_remaining = previous_balance + added - sold;
+      const cost_price = inv?.cost_price ?? 0;
+      const remaining_cost = net_remaining * cost_price;
+
+      return {
+        product,
+        previous_balance,
+        added,
+        sold,
+        net_remaining,
+        cost_price,
+        remaining_cost,
+        inventory_id: inv?.id ?? null,
+      };
+    });
+  }, [products, inventory, soldByProduct]);
+
+  const [editedValues, setEditedValues] = useState<
+    Record<
+      string,
+      { added?: string; cost_price?: string; previous_balance?: string }
+    >
+  >({});
+
+  function handleFieldChange(
+    productId: string,
+    field: "added" | "cost_price" | "previous_balance",
+    value: string
+  ) {
+    setEditedValues((prev) => ({
+      ...prev,
+      [productId]: { ...prev[productId], [field]: value },
+    }));
+  }
+
+  function handleSave(productId: string) {
+    const edited = editedValues[productId];
+    if (!edited) return;
+
+    const row = rows.find((r) => r.product.id === productId);
+    if (!row) return;
+
+    const upsertData = {
+      entry_date: date,
+      product_id: productId,
+      previous_balance:
+        edited.previous_balance != null
+          ? Number(edited.previous_balance)
+          : row.previous_balance,
+      added: edited.added != null ? Number(edited.added) : row.added,
+      cost_price:
+        edited.cost_price != null
+          ? Number(edited.cost_price)
+          : row.cost_price,
+      created_by: userId,
+    };
+
+    upsertInventory.mutate(
+      { inventoryId: row.inventory_id, upsertData },
+      {
+        onSuccess: () => {
+          setEditedValues((prev) => {
+            const next = { ...prev };
+            delete next[productId];
+            return next;
+          });
+        },
+      }
+    );
+  }
+
+  const totals = useMemo(
+    () => ({
+      previous_balance: rows.reduce((sum, r) => sum + r.previous_balance, 0),
+      added: rows.reduce((sum, r) => sum + r.added, 0),
+      sold: rows.reduce((sum, r) => sum + r.sold, 0),
+      net_remaining: rows.reduce((sum, r) => sum + r.net_remaining, 0),
+      remaining_cost: rows.reduce((sum, r) => sum + r.remaining_cost, 0),
+    }),
+    [rows]
+  );
+
+  const hasEdits = (productId: string) => {
+    const e = editedValues[productId];
+    return (
+      e &&
+      (e.added != null ||
+        e.cost_price != null ||
+        e.previous_balance != null)
+    );
+  };
+
+  return (
+    <div className="mt-8">
+      {isUsingMock && <DevMockBanner label="جرد تجريبي" />}
+      <h3 className="text-lg font-semibold mb-3">جدول البونات (المخزون)</h3>
+      <div className="hidden md:block rounded-md border overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-start">
+                {INVENTORY_TABLE_HEADERS.product}
+              </TableHead>
+              <TableHead className="text-start">
+                {INVENTORY_TABLE_HEADERS.previousBalance}
+              </TableHead>
+              <TableHead className="text-start">
+                {INVENTORY_TABLE_HEADERS.added}
+              </TableHead>
+              <TableHead className="text-start">
+                {INVENTORY_TABLE_HEADERS.sold}
+              </TableHead>
+              <TableHead className="text-start">
+                {INVENTORY_TABLE_HEADERS.netRemaining}
+              </TableHead>
+              {isAdmin && (
+                <>
+                  <TableHead className="text-start">
+                    {INVENTORY_TABLE_HEADERS.costPrice}
+                  </TableHead>
+                  <TableHead className="text-start">
+                    {INVENTORY_TABLE_HEADERS.remainingCost}
+                  </TableHead>
+                </>
+              )}
+              <TableHead className="text-start w-[60px]" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => {
+              const edited = editedValues[row.product.id];
+              const currentAdded =
+                edited?.added != null ? Number(edited.added) : row.added;
+              const currentPrevBalance =
+                edited?.previous_balance != null
+                  ? Number(edited.previous_balance)
+                  : row.previous_balance;
+              const currentNetRemaining =
+                currentPrevBalance + currentAdded - row.sold;
+              const currentCostPrice =
+                edited?.cost_price != null
+                  ? Number(edited.cost_price)
+                  : row.cost_price;
+              const currentRemainingCost =
+                currentNetRemaining * currentCostPrice;
+
+              return (
+                <TableRow key={row.product.id}>
+                  <TableCell className="font-medium">
+                    {row.product.name}
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      className="w-24 h-8 text-left"
+                      dir="ltr"
+                      defaultValue={row.previous_balance}
+                      onChange={(e) =>
+                        handleFieldChange(
+                          row.product.id,
+                          "previous_balance",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      className="w-24 h-8 text-left"
+                      dir="ltr"
+                      defaultValue={row.added}
+                      onChange={(e) =>
+                        handleFieldChange(
+                          row.product.id,
+                          "added",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </TableCell>
+                  <TableCell className="font-semibold text-red-600">
+                    {formatQuantity(row.sold)}
+                  </TableCell>
+                  <TableCell className="font-bold">
+                    {formatQuantity(currentNetRemaining)}
+                  </TableCell>
+                  {isAdmin && (
+                    <>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="w-28 h-8 text-left"
+                          dir="ltr"
+                          defaultValue={row.cost_price}
+                          onChange={(e) =>
+                            handleFieldChange(
+                              row.product.id,
+                              "cost_price",
+                              e.target.value
+                            )
+                          }
+                        />
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        {formatCurrency(currentRemainingCost)}
+                      </TableCell>
+                    </>
+                  )}
+                  <TableCell>
+                    {hasEdits(row.product.id) && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={upsertInventory.isPending}
+                        onClick={() => handleSave(row.product.id)}
+                      >
+                        <Save className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+          <TableFooter>
+            <TableRow className="font-bold bg-muted/50">
+              <TableCell>الإجمالي</TableCell>
+              <TableCell>{formatQuantity(totals.previous_balance)}</TableCell>
+              <TableCell>{formatQuantity(totals.added)}</TableCell>
+              <TableCell className="text-red-600">
+                {formatQuantity(totals.sold)}
+              </TableCell>
+              <TableCell>{formatQuantity(totals.net_remaining)}</TableCell>
+              {isAdmin && (
+                <>
+                  <TableCell>—</TableCell>
+                  <TableCell>
+                    {formatCurrency(totals.remaining_cost)}
+                  </TableCell>
+                </>
+              )}
+              <TableCell />
+            </TableRow>
+          </TableFooter>
+        </Table>
+      </div>
+
+      {/* Mobile card view */}
+      <div className="md:hidden space-y-3">
+        {rows.map((row) => {
+          const edited = editedValues[row.product.id];
+          const currentAdded =
+            edited?.added != null ? Number(edited.added) : row.added;
+          const currentPrevBalance =
+            edited?.previous_balance != null
+              ? Number(edited.previous_balance)
+              : row.previous_balance;
+          const currentNetRemaining =
+            currentPrevBalance + currentAdded - row.sold;
+          const currentCostPrice =
+            edited?.cost_price != null
+              ? Number(edited.cost_price)
+              : row.cost_price;
+          const currentRemainingCost = currentNetRemaining * currentCostPrice;
+
+          return (
+            <div
+              key={row.product.id}
+              className="rounded-lg border p-3 space-y-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold">{row.product.name}</div>
+                <div className="text-right">
+                  <div className="text-[10px] text-muted-foreground">
+                    {INVENTORY_TABLE_HEADERS.netRemaining}
+                  </div>
+                  <div className="font-bold text-base">
+                    {formatQuantity(currentNetRemaining)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">
+                    {INVENTORY_TABLE_HEADERS.previousBalance}
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    className="h-8 text-left"
+                    dir="ltr"
+                    defaultValue={row.previous_balance}
+                    onChange={(e) =>
+                      handleFieldChange(
+                        row.product.id,
+                        "previous_balance",
+                        e.target.value,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">
+                    {INVENTORY_TABLE_HEADERS.added}
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    className="h-8 text-left"
+                    dir="ltr"
+                    defaultValue={row.added}
+                    onChange={(e) =>
+                      handleFieldChange(
+                        row.product.id,
+                        "added",
+                        e.target.value,
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">
+                    {INVENTORY_TABLE_HEADERS.sold}
+                  </div>
+                  <div className="h-8 flex items-center font-semibold text-red-600">
+                    {formatQuantity(row.sold)}
+                  </div>
+                </div>
+                {isAdmin && (
+                  <div>
+                    <div className="text-[10px] text-muted-foreground mb-1">
+                      {INVENTORY_TABLE_HEADERS.costPrice}
+                    </div>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="h-8 text-left"
+                      dir="ltr"
+                      defaultValue={row.cost_price}
+                      onChange={(e) =>
+                        handleFieldChange(
+                          row.product.id,
+                          "cost_price",
+                          e.target.value,
+                        )
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              {isAdmin && (
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <span className="text-xs text-muted-foreground">
+                    {INVENTORY_TABLE_HEADERS.remainingCost}
+                  </span>
+                  <span className="font-semibold">
+                    {formatCurrency(currentRemainingCost)}
+                  </span>
+                </div>
+              )}
+
+              {hasEdits(row.product.id) && (
+                <Button
+                  size="sm"
+                  className="w-full gap-2"
+                  disabled={upsertInventory.isPending}
+                  onClick={() => handleSave(row.product.id)}
+                >
+                  <Save className="h-4 w-4" />
+                  حفظ
+                </Button>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Mobile totals card */}
+        <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+          <div className="font-bold text-sm">الإجمالي</div>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <div className="text-[10px] text-muted-foreground">
+                {INVENTORY_TABLE_HEADERS.previousBalance}
+              </div>
+              <div className="font-bold">
+                {formatQuantity(totals.previous_balance)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground">
+                {INVENTORY_TABLE_HEADERS.added}
+              </div>
+              <div className="font-bold">{formatQuantity(totals.added)}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground">
+                {INVENTORY_TABLE_HEADERS.sold}
+              </div>
+              <div className="font-bold text-red-600">
+                {formatQuantity(totals.sold)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground">
+                {INVENTORY_TABLE_HEADERS.netRemaining}
+              </div>
+              <div className="font-bold">
+                {formatQuantity(totals.net_remaining)}
+              </div>
+            </div>
+            {isAdmin && (
+              <div className="col-span-2">
+                <div className="text-[10px] text-muted-foreground">
+                  {INVENTORY_TABLE_HEADERS.remainingCost}
+                </div>
+                <div className="font-bold">
+                  {formatCurrency(totals.remaining_cost)}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\loading.tsx
+================================================================================
+
+import {
+  HeaderSkeleton,
+  ToolbarSkeleton,
+  TableSkeleton,
+  SectionHeaderSkeleton,
+  CashBalanceSkeleton,
+} from "@/components/skeletons/page-skeleton";
+
+export default function CementDailyLoading() {
+  return (
+    <div className="flex flex-col h-full">
+      <HeaderSkeleton />
+      <div className="flex-1 overflow-auto px-4 pb-6 md:px-6">
+        <ToolbarSkeleton />
+        <TableSkeleton rows={8} columns={8} />
+
+        <div className="mt-8">
+          <SectionHeaderSkeleton withButton />
+          <TableSkeleton rows={4} columns={4} />
+        </div>
+
+        <div className="mt-8">
+          <SectionHeaderSkeleton />
+          <TableSkeleton rows={4} columns={5} />
+        </div>
+
+        <div className="mt-8">
+          <CashBalanceSkeleton />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+================================================================================
+FILE PATH: C:\Users\moata\Documents\Al-Haj-Salim-Steel-Cement-Accounting-System\src\app\(dashboard)\cement-daily\page.tsx
+================================================================================
+
+import { todayISO } from "@/lib/utils";
+import { Header } from "@/components/layout/header";
+import { CementDailyClient } from "./client-page";
+
+interface PageProps {
+  searchParams: Promise<{ date?: string }>;
+}
+
+export default async function CementDailyPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const date = params.date || todayISO();
+
+  return (
+    <div className="flex flex-col h-full">
+      <Header title="يومية الاسمنت" />
+      <div className="flex-1 overflow-auto px-4 pb-6 md:px-6">
+        <CementDailyClient initialDate={date} />
+      </div>
+    </div>
+  );
+}
+
+

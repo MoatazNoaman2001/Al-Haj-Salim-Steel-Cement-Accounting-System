@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Banknote, ArrowDownToLine, Wallet } from "lucide-react";
+import { Banknote, ArrowDownToLine, Wallet, Building2, HandCoins } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useCementEntries, useDailyDeposits, useDailyCashBalance } from "@/hooks/use-cement-daily-queries";
 
@@ -16,22 +16,41 @@ export function CashBalanceSummary({ date }: CashBalanceSummaryProps) {
 
   const summary = useMemo(() => {
     const activeEntries = entries.filter((e) => !e.is_corrected);
+
     const totalSales = activeEntries.reduce(
-      (sum, e) => sum + (e.total_amount ?? 0),
+      (sum, e) => sum + (e.total_amount ?? 0) + (e.transport_in ?? 0) - (e.tanzeel ?? 0),
       0
     );
     const totalDeposits = deposits.reduce(
       (sum, d) => sum + (d.amount ?? 0),
       0
     );
-    const openingBalance = cashBalance?.opening_balance ?? 0;
-    const closingBalance = openingBalance + totalSales - totalDeposits;
 
-    return { totalSales, totalDeposits, openingBalance, closingBalance };
+    // Cash received = amount_paid where NO bank (cash payment)
+    const cashReceived = activeEntries
+      .filter((e) => !e.bank_id)
+      .reduce((sum, e) => sum + (e.amount_paid ?? 0), 0);
+
+    // Bank transfers = amount_paid where bank_id IS set
+    const bankTransfers = activeEntries
+      .filter((e) => e.bank_id)
+      .reduce((sum, e) => sum + (e.amount_paid ?? 0), 0);
+
+    const openingBalance = cashBalance?.opening_balance ?? 0;
+    const closingBalance = openingBalance + cashReceived - totalDeposits;
+
+    return {
+      totalSales,
+      totalDeposits,
+      openingBalance,
+      closingBalance,
+      cashReceived,
+      bankTransfers,
+    };
   }, [entries, deposits, cashBalance]);
 
   return (
-    <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       <div className="rounded-lg border bg-card p-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
           <Wallet className="h-4 w-4" />
@@ -48,6 +67,24 @@ export function CashBalanceSummary({ date }: CashBalanceSummaryProps) {
         </div>
         <p className="text-xl font-bold text-green-600">
           {formatCurrency(summary.totalSales)}
+        </p>
+      </div>
+      <div className="rounded-lg border bg-card p-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+          <HandCoins className="h-4 w-4" />
+          النقدي المحصل
+        </div>
+        <p className="text-xl font-bold text-blue-600">
+          {formatCurrency(summary.cashReceived)}
+        </p>
+      </div>
+      <div className="rounded-lg border bg-card p-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+          <Building2 className="h-4 w-4" />
+          المحول للبنوك
+        </div>
+        <p className="text-xl font-bold text-purple-600">
+          {formatCurrency(summary.bankTransfers)}
         </p>
       </div>
       <div className="rounded-lg border bg-card p-4">
